@@ -1,0 +1,1 @@
+option('build-components', type: 'boolean', value: true, description: 'build unity-platform-components library.')

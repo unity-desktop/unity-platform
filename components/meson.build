@@ -10,9 +10,24 @@ deps = [
   dependency('gsettings-desktop-schemas'),
 ]
 
-sources = files('strip/unity-strip.c')
-headers = files('strip/unity-strip.h')
-incs    = include_directories('strip')
+sources = files(
+  'style.c',
+  'strip/unity-strip.c',
+  'popup/unity-base-popup.c',
+  'popup/unity-dialog-popup.c',
+  'popup/unity-window-popup.c',
+)
+headers = files(
+  'strip/unity-strip.h',
+  'popup/unity-base-popup.h',
+  'popup/unity-dialog-popup.h',
+  'popup/unity-window-popup.h',
+)
+incs = [
+  include_directories('.'),
+  include_directories('strip'),
+  include_directories('popup'),
+]
 
 sources += gnome.compile_resources(
   name + '-resources',

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="libadwaita" version="1.0"/>
+  <template class="UnityDialogPopup" parent="UnityBasePopup">
+    <child>
+      <object class="AdwToolbarView">
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="overflow">hidden</property>
+        <property name="top-bar-style">flat</property>
+        <style>
+          <class name="unity-dialog-popup"/>
+        </style>
+        <child type="top">
+          <object class="AdwHeaderBar">
+            <property name="show-start-title-buttons">false</property>
+            <property name="show-end-title-buttons">false</property>
+            <property name="title-widget">
+              <object class="GtkLabel" id="title_label">
+                <property name="ellipsize">end</property>
+                <style>
+                  <class name="title-3"/>
+                  <class name="body"/>
+                </style>
+              </object>
+            </property>
+            <child type="end">
+              <object class="GtkButton">
+                <property name="can-focus">false</property>
+                <property name="tooltip-text" translatable="yes">Close</property>
+                <property name="action-name">window.close</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="icon-name">window-close-symbolic</property>
+                    <property name="use-fallback">true</property>
+                    <style>
+                      <class name="dialog-icon"/>
+                    </style>
+                  </object>
+                </child>
+                <style>
+                  <class name="close"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <property name="content">
+          <object class="AdwBin" id="content_bin"/>
+        </property>
+      </object>
+    </child>
+  </template>
+</interface>

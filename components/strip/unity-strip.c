@@ -9,8 +9,10 @@
 
 #include <gdesktop-enums.h>
 
-#define INTERFACE_SCHEMA         "org.gnome.desktop.interface"
-#define KEY_COLOR_SCHEME         "color-scheme"
+#include "style-private.h"
+
+#define INTERFACE_SCHEMA "org.gnome.desktop.interface"
+#define KEY_COLOR_SCHEME "color-scheme"
 
 G_DEFINE_TYPE (UnityStrip, unity_strip, ASTAL_TYPE_WINDOW)
 
@@ -30,44 +32,6 @@ platform_settings (void)
     shared = g_settings_new (INTERFACE_SCHEMA);
 
   return shared;
-}
-
-static void
-apply_scheme_to_provider (GtkCssProvider *provider)
-{
-  GDesktopColorScheme     current_scheme  = g_settings_get_enum (platform_settings (), KEY_COLOR_SCHEME);
-  GtkInterfaceColorScheme provider_scheme =
-    current_scheme == G_DESKTOP_COLOR_SCHEME_PREFER_LIGHT
-      ? GTK_INTERFACE_COLOR_SCHEME_LIGHT
-      : GTK_INTERFACE_COLOR_SCHEME_DARK;
-
-  g_object_set (provider, "prefers-color-scheme", provider_scheme, NULL);
-}
-
-static void
-ensure_platform_style (GdkDisplay *display)
-{
-  static GQuark   provider_quark;
-  GtkCssProvider *provider;
-
-  if (G_UNLIKELY (provider_quark == 0))
-    provider_quark = g_quark_from_static_string ("unity-strip-platform-provider");
-
-  if (g_object_get_qdata (G_OBJECT (display), provider_quark) != NULL)
-    return;
-
-  provider = gtk_css_provider_new ();
-  gtk_css_provider_load_from_resource (provider, "/org/unity/platform/components/unity-strip.css");
-  gtk_style_context_add_provider_for_display (
-    display, GTK_STYLE_PROVIDER (provider),
-    GTK_STYLE_PROVIDER_PRIORITY_THEME + 1);
-  apply_scheme_to_provider (provider);
-
-  g_signal_connect_object (platform_settings (), "changed::" KEY_COLOR_SCHEME,
-                           G_CALLBACK (apply_scheme_to_provider), provider,
-                           G_CONNECT_SWAPPED);
-
-  g_object_set_qdata_full (G_OBJECT (display), provider_quark, provider, g_object_unref);
 }
 
 AstalWindowAnchor
@@ -96,14 +60,14 @@ pos_class_for_anchor (AstalWindowAnchor anchor)
   AstalWindowAnchor left   = ASTAL_WINDOW_ANCHOR_LEFT;
   AstalWindowAnchor right  = ASTAL_WINDOW_ANCHOR_RIGHT;
 
-  if (anchor == (left | right | bottom))
-    return "pos-top";
-  if (anchor == (left | right | top))
-    return "pos-bottom";
-  if (anchor == (top | bottom | right))
-    return "pos-left";
   if (anchor == (top | bottom | left))
+    return "pos-left";
+  if (anchor == (top | bottom | right))
     return "pos-right";
+  if (anchor == (left | right | top))
+    return "pos-top";
+  if (anchor == (left | right | bottom))
+    return "pos-bottom";
 
   return NULL;
 }
@@ -149,7 +113,7 @@ unity_strip_realize (GtkWidget *widget)
 
   GTK_WIDGET_CLASS (unity_strip_parent_class)->realize (widget);
 
-  ensure_platform_style (gtk_widget_get_display (widget));
+  unity_platform_style_ensure (gtk_widget_get_display (widget));
 
   g_signal_connect_object (platform_settings (), "changed::" KEY_COLOR_SCHEME,
                            G_CALLBACK (on_settings_scheme_changed), self,

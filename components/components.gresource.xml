@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/unity/platform/components">
-    <file alias="unity-strip.css" compressed="true">strip/unity-strip.css</file>
+    <file compressed="true">components.css</file>
+    <file compressed="true">popup/unity-dialog-popup.ui</file>
   </gresource>
 </gresources>

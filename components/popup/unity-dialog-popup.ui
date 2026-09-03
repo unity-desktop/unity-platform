@@ -16,15 +16,19 @@
           <object class="AdwHeaderBar">
             <property name="show-start-title-buttons">false</property>
             <property name="show-end-title-buttons">false</property>
-            <property name="title-widget">
+            <property name="show-title">false</property>
+            <child type="start">
               <object class="GtkLabel" id="title_label">
                 <property name="ellipsize">end</property>
-                <style>
-                  <class name="title-3"/>
-                  <class name="body"/>
-                </style>
+                <property name="halign">start</property>
+                <property name="hexpand">true</property>
+                <property name="margin-start">6</property>
+                <attributes>
+                  <attribute name="scale" value="1.5"/>
+                  <attribute name="weight" value="500"/>
+                </attributes>
               </object>
-            </property>
+            </child>
             <child type="end">
               <object class="GtkButton">
                 <property name="can-focus">false</property>

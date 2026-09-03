@@ -25,3 +25,7 @@ pkgconfig = import('pkgconfig')
 if get_option('build-components')
   subdir('components')
 endif
+
+if get_option('build-quit')
+  subdir('quit')
+endif

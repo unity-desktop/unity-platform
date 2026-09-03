@@ -76,6 +76,13 @@ on_escape_pressed (GtkWidget *widget, GVariant *args, gpointer user_data)
 }
 
 static void
+on_focus_leave (GtkEventControllerFocus *focus, gpointer user_data)
+{
+  (void) focus;
+  maybe_dismiss (UNITY_BASE_POPUP (user_data));
+}
+
+static void
 on_outside_pressed (GtkGestureClick *gesture, gint n_press, gdouble x, gdouble y,
                     gpointer user_data)
 {
@@ -117,7 +124,7 @@ unity_base_popup_constructed (GObject *object)
                            ASTAL_WINDOW_ANCHOR_TOP | ASTAL_WINDOW_ANCHOR_BOTTOM |
                            ASTAL_WINDOW_ANCHOR_LEFT | ASTAL_WINDOW_ANCHOR_RIGHT);
   astal_window_set_exclusivity (ASTAL_WINDOW (self), ASTAL_EXCLUSIVITY_NORMAL);
-  astal_window_set_keymode (ASTAL_WINDOW (self), ASTAL_KEYMODE_EXCLUSIVE);
+  astal_window_set_keymode (ASTAL_WINDOW (self), ASTAL_KEYMODE_ON_DEMAND);
 }
 
 static void
@@ -191,7 +198,8 @@ unity_base_popup_class_init (UnityBasePopupClass *klass)
 static void
 unity_base_popup_init (UnityBasePopup *self)
 {
-  GtkGesture *click;
+  GtkGesture         *click;
+  GtkEventController *focus;
 
   PRIV (self)->dismissable = TRUE;
 
@@ -200,4 +208,8 @@ unity_base_popup_init (UnityBasePopup *self)
                                               GTK_PHASE_CAPTURE);
   g_signal_connect (click, "pressed", G_CALLBACK (on_outside_pressed), self);
   gtk_widget_add_controller (GTK_WIDGET (self), GTK_EVENT_CONTROLLER (click));
+
+  focus = gtk_event_controller_focus_new ();
+  g_signal_connect (focus, "leave", G_CALLBACK (on_focus_leave), self);
+  gtk_widget_add_controller (GTK_WIDGET (self), focus);
 }

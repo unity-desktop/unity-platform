@@ -52,6 +52,8 @@ apply_layout (UnityWindowPopup *self)
     }
 
   gtk_widget_remove_css_class (child, "maximized");
+  gtk_widget_set_halign  (child, GTK_ALIGN_START);
+  gtk_widget_set_valign  (child, GTK_ALIGN_START);
   gtk_widget_set_hexpand (child, FALSE);
   gtk_widget_set_vexpand (child, FALSE);
 
@@ -133,6 +135,14 @@ unity_window_popup_set_maximized (UnityWindowPopup *self, gboolean maximized)
 }
 
 static void
+unity_window_popup_realize (GtkWidget *widget)
+{
+  GTK_WIDGET_CLASS (unity_window_popup_parent_class)->realize (widget);
+
+  apply_layout (UNITY_WINDOW_POPUP (widget));
+}
+
+static void
 unity_window_popup_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
   UnityWindowPopup *self = UNITY_WINDOW_POPUP (object);
@@ -172,6 +182,8 @@ unity_window_popup_class_init (UnityWindowPopupClass *klass)
 
   object_class->get_property = unity_window_popup_get_property;
   object_class->set_property = unity_window_popup_set_property;
+
+  widget_class->realize = unity_window_popup_realize;
 
   properties[PROP_SIZE_RATIO] = g_param_spec_double (
     "size-ratio", NULL, NULL, 0.0, 1.0, 2.0 / 3.0,

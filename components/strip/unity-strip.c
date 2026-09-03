@@ -189,11 +189,21 @@ unity_strip_class_init (UnityStripClass *klass)
 
   widget_class->realize = unity_strip_realize;
 
+  /**
+   * UnityStrip:color-scheme:
+   *
+   * Current desktop color scheme from `org.gnome.desktop.interface`.
+   */
   properties[PROP_COLOR_SCHEME] = g_param_spec_int (
     "color-scheme", NULL, NULL,
     G_DESKTOP_COLOR_SCHEME_DEFAULT, G_MAXINT,
     G_DESKTOP_COLOR_SCHEME_DEFAULT,
     G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  /**
+   * UnityStrip:stylesheet:
+   *
+   * Optional CSS resource path loaded when the strip is realized.
+   */
   properties[PROP_STYLESHEET] = g_param_spec_string (
     "stylesheet", NULL, NULL, NULL,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);

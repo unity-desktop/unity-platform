@@ -195,9 +195,19 @@ unity_window_popup_class_init (UnityWindowPopupClass *klass)
 
   widget_class->realize = unity_window_popup_realize;
 
+  /**
+   * UnityWindowPopup:size-ratio:
+   *
+   * Fraction of monitor geometry used to size popup content when not maximized.
+   */
   properties[PROP_SIZE_RATIO] = g_param_spec_double (
     "size-ratio", NULL, NULL, 0.0, 1.0, 2.0 / 3.0,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  /**
+   * UnityWindowPopup:maximized:
+   *
+   * Whether maximized layout mode is enabled.
+   */
   properties[PROP_MAXIMIZED] = g_param_spec_boolean (
     "maximized", NULL, NULL, FALSE,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);

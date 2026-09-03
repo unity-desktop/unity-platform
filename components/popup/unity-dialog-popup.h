@@ -13,6 +13,11 @@ G_BEGIN_DECLS
 
 #define UNITY_TYPE_DIALOG_POPUP (unity_dialog_popup_get_type ())
 
+/**
+ * UnityDialogPopup:
+ *
+ * Popup variant with a titled dialog template and replaceable content area.
+ */
 G_DECLARE_DERIVABLE_TYPE (UnityDialogPopup,
                           unity_dialog_popup,
                           UNITY,
@@ -26,7 +31,22 @@ struct _UnityDialogPopupClass
   gpointer            padding[8];
 };
 
+/**
+ * unity_dialog_popup_get_content:
+ * @self: a #UnityDialogPopup
+ *
+ * Gets the current dialog content widget.
+ *
+ * Returns: (transfer none) (nullable): the current content widget.
+ */
 GtkWidget *unity_dialog_popup_get_content (UnityDialogPopup *self);
+/**
+ * unity_dialog_popup_set_content:
+ * @self: a #UnityDialogPopup
+ * @content: (nullable): content widget to show in the dialog
+ *
+ * Sets the dialog content widget.
+ */
 void       unity_dialog_popup_set_content (UnityDialogPopup *self,
                                            GtkWidget        *content);
 

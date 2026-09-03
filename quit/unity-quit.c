@@ -392,6 +392,36 @@ unity_quit_class_init (UnityQuitClass *klass)
     { PROP_CAN_REBOOT_TO_FIRMWARE_SETUP,   "can-reboot-to-firmware-setup"   },
     { PROP_CAN_REBOOT_TO_BOOT_LOADER_MENU, "can-reboot-to-boot-loader-menu" },
   };
+  /**
+   * UnityQuit:can-suspend:
+   *
+   * Whether logind currently allows suspend.
+   */
+  /**
+   * UnityQuit:can-hibernate:
+   *
+   * Whether logind currently allows hibernation.
+   */
+  /**
+   * UnityQuit:can-power-off:
+   *
+   * Whether logind currently allows power off.
+   */
+  /**
+   * UnityQuit:can-reboot:
+   *
+   * Whether logind currently allows reboot.
+   */
+  /**
+   * UnityQuit:can-reboot-to-firmware-setup:
+   *
+   * Whether reboot-to-firmware-setup is currently available.
+   */
+  /**
+   * UnityQuit:can-reboot-to-boot-loader-menu:
+   *
+   * Whether reboot-to-boot-loader-menu is currently available.
+   */
   for (gsize i = 0; i < G_N_ELEMENTS (pspecs); i++)
     properties[pspecs[i].prop] = g_param_spec_boolean (
       pspecs[i].name, NULL, NULL, FALSE,
@@ -399,6 +429,13 @@ unity_quit_class_init (UnityQuitClass *klass)
 
   g_object_class_install_properties (object_class, G_N_ELEMENTS (properties), properties);
 
+  /**
+   * UnityQuit::prepare-for-sleep:
+   * @self: the #UnityQuit instance
+   * @start: %TRUE before suspend/hibernate, %FALSE after resume
+   *
+   * Emitted when logind announces a sleep transition.
+   */
   signals[SIGNAL_PREPARE_FOR_SLEEP] = g_signal_new (
     "prepare-for-sleep", G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST,
     0, NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_BOOLEAN);

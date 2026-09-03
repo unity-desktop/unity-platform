@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unity Platform API Docs</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    h1 { margin-bottom: .5rem; }
+    ul { padding-left: 1.25rem; }
+    li { margin: .4rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Unity Platform API Reference</h1>
+  <p>Version @PROJECT_VERSION@</p>
+  <ul>
+    <li><a href="./unity-platform-components/">UnityPlatformComponents</a></li>
+    <li><a href="./unity-platform-quit/">UnityPlatformQuit</a></li>
+  </ul>
+</body>
+</html>

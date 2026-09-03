@@ -54,7 +54,7 @@ pkgconfig.generate(
   requires: deps,
 )
 
-gnome.generate_gir(
+unity_platform_components_gir = gnome.generate_gir(
   lib,
   sources: sources + headers,
   namespace: 'UnityPlatformComponents',

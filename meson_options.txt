@@ -1,2 +1,3 @@
 option('build-components', type: 'boolean', value: true, description: 'build unity-platform-components library.')
 option('build-quit',       type: 'boolean', value: true, description: 'build unity-platform-quit library.')
+option('documentation',   type: 'boolean', value: false, description: 'Build API reference with gi-docgen.')

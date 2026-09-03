@@ -193,15 +193,31 @@ unity_base_popup_class_init (UnityBasePopupClass *klass)
   widget_class->realize = unity_base_popup_realize;
   window_class->close_request = unity_base_popup_close_request;
 
+  /**
+   * UnityBasePopup:dismissable:
+   *
+   * Whether Escape, focus-out, and outside-click can dismiss the popup.
+   */
   properties[PROP_DISMISSABLE] = g_param_spec_boolean (
     "dismissable", NULL, NULL, TRUE,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  /**
+   * UnityBasePopup:stylesheet:
+   *
+   * Optional CSS resource path loaded for the popup.
+   */
   properties[PROP_STYLESHEET] = g_param_spec_string (
     "stylesheet", NULL, NULL, NULL,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, G_N_ELEMENTS (properties), properties);
 
+  /**
+   * UnityBasePopup::closed:
+   * @self: the #UnityBasePopup instance
+   *
+   * Emitted after the popup close request is handled and the window is hidden.
+   */
   signals[SIGNAL_CLOSED] = g_signal_new (
     "closed", G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST,
     0, NULL, NULL, NULL, G_TYPE_NONE, 0);

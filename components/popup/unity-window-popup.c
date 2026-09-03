@@ -7,6 +7,8 @@
 
 #include "unity-window-popup.h"
 
+#include <astal-4.h>
+
 typedef struct
 {
   gdouble  size_ratio;
@@ -135,6 +137,13 @@ unity_window_popup_set_maximized (UnityWindowPopup *self, gboolean maximized)
 }
 
 static void
+unity_window_popup_constructed (GObject *object)
+{
+  G_OBJECT_CLASS (unity_window_popup_parent_class)->constructed (object);
+  astal_window_set_keymode (ASTAL_WINDOW (object), ASTAL_KEYMODE_ON_DEMAND);
+}
+
+static void
 unity_window_popup_realize (GtkWidget *widget)
 {
   GTK_WIDGET_CLASS (unity_window_popup_parent_class)->realize (widget);
@@ -180,6 +189,7 @@ unity_window_popup_class_init (UnityWindowPopupClass *klass)
   GObjectClass   *object_class = G_OBJECT_CLASS (klass);
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
+  object_class->constructed  = unity_window_popup_constructed;
   object_class->get_property = unity_window_popup_get_property;
   object_class->set_property = unity_window_popup_set_property;
 

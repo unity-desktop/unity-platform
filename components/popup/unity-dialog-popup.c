@@ -7,6 +7,8 @@
 
 #include "unity-dialog-popup.h"
 
+#include <astal-4.h>
+
 typedef struct
 {
   GtkLabel  *title_label;
@@ -47,6 +49,13 @@ unity_dialog_popup_set_content (UnityDialogPopup *self, GtkWidget *content)
 }
 
 static void
+unity_dialog_popup_constructed (GObject *object)
+{
+  G_OBJECT_CLASS (unity_dialog_popup_parent_class)->constructed (object);
+  astal_window_set_keymode (ASTAL_WINDOW (object), ASTAL_KEYMODE_EXCLUSIVE);
+}
+
+static void
 unity_dialog_popup_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
   switch ((UnityDialogPopupProperty) prop_id)
@@ -74,6 +83,7 @@ unity_dialog_popup_class_init (UnityDialogPopupClass *klass)
   GObjectClass   *object_class = G_OBJECT_CLASS (klass);
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
+  object_class->constructed  = unity_dialog_popup_constructed;
   object_class->get_property = unity_dialog_popup_get_property;
   object_class->set_property = unity_dialog_popup_set_property;
 

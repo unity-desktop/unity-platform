@@ -124,7 +124,6 @@ unity_base_popup_constructed (GObject *object)
                            ASTAL_WINDOW_ANCHOR_TOP | ASTAL_WINDOW_ANCHOR_BOTTOM |
                            ASTAL_WINDOW_ANCHOR_LEFT | ASTAL_WINDOW_ANCHOR_RIGHT);
   astal_window_set_exclusivity (ASTAL_WINDOW (self), ASTAL_EXCLUSIVITY_NORMAL);
-  astal_window_set_keymode (ASTAL_WINDOW (self), ASTAL_KEYMODE_ON_DEMAND);
 }
 
 static void

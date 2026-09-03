@@ -29,3 +29,7 @@ endif
 if get_option('build-quit')
   subdir('quit')
 endif
+
+if get_option('documentation')
+  subdir('doc')
+endif

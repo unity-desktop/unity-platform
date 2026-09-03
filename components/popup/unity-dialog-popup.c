@@ -87,6 +87,11 @@ unity_dialog_popup_class_init (UnityDialogPopupClass *klass)
   object_class->get_property = unity_dialog_popup_get_property;
   object_class->set_property = unity_dialog_popup_set_property;
 
+  /**
+   * UnityDialogPopup:content:
+   *
+   * Child widget shown in the popup content area.
+   */
   properties[PROP_CONTENT] = g_param_spec_object (
     "content", NULL, NULL, GTK_TYPE_WIDGET,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);

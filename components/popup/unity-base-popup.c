@@ -7,11 +7,12 @@
 
 #include "unity-base-popup.h"
 
-#include "style-private.h"
+#include "stylesheet-private.h"
 
 typedef struct
 {
-  gboolean dismissable;
+  gboolean  dismissable;
+  gchar    *stylesheet;
 } UnityBasePopupPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (UnityBasePopup, unity_base_popup, ASTAL_TYPE_WINDOW)
@@ -21,9 +22,10 @@ G_DEFINE_TYPE_WITH_PRIVATE (UnityBasePopup, unity_base_popup, ASTAL_TYPE_WINDOW)
 typedef enum
 {
   PROP_DISMISSABLE = 1,
+  PROP_STYLESHEET,
 } UnityBasePopupProperty;
 
-static GParamSpec *properties[PROP_DISMISSABLE + 1];
+static GParamSpec *properties[PROP_STYLESHEET + 1];
 
 typedef enum
 {
@@ -132,6 +134,8 @@ unity_base_popup_realize (GtkWidget *widget)
   GTK_WIDGET_CLASS (unity_base_popup_parent_class)->realize (widget);
 
   unity_platform_style_ensure (gtk_widget_get_display (widget));
+  if (PRIV (widget)->stylesheet != NULL)
+    unity_platform_load_stylesheet (gtk_widget_get_display (widget), PRIV (widget)->stylesheet);
 }
 
 static void
@@ -143,6 +147,9 @@ unity_base_popup_get_property (GObject *object, guint prop_id, GValue *value, GP
     {
     case PROP_DISMISSABLE:
       g_value_set_boolean (value, unity_base_popup_get_dismissable (self));
+      break;
+    case PROP_STYLESHEET:
+      g_value_set_string (value, PRIV (self)->stylesheet);
       break;
     }
 }
@@ -157,7 +164,18 @@ unity_base_popup_set_property (GObject *object, guint prop_id, const GValue *val
     case PROP_DISMISSABLE:
       unity_base_popup_set_dismissable (self, g_value_get_boolean (value));
       break;
+    case PROP_STYLESHEET:
+      g_free (PRIV (self)->stylesheet);
+      PRIV (self)->stylesheet = g_value_dup_string (value);
+      break;
     }
+}
+
+static void
+unity_base_popup_finalize (GObject *object)
+{
+  g_free (PRIV (object)->stylesheet);
+  G_OBJECT_CLASS (unity_base_popup_parent_class)->finalize (object);
 }
 
 static void
@@ -170,6 +188,7 @@ unity_base_popup_class_init (UnityBasePopupClass *klass)
   object_class->constructed  = unity_base_popup_constructed;
   object_class->get_property = unity_base_popup_get_property;
   object_class->set_property = unity_base_popup_set_property;
+  object_class->finalize     = unity_base_popup_finalize;
 
   widget_class->realize = unity_base_popup_realize;
   window_class->close_request = unity_base_popup_close_request;
@@ -177,6 +196,9 @@ unity_base_popup_class_init (UnityBasePopupClass *klass)
   properties[PROP_DISMISSABLE] = g_param_spec_boolean (
     "dismissable", NULL, NULL, TRUE,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  properties[PROP_STYLESHEET] = g_param_spec_string (
+    "stylesheet", NULL, NULL, NULL,
+    G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, G_N_ELEMENTS (properties), properties);
 

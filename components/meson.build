@@ -11,7 +11,7 @@ deps = [
 ]
 
 sources = files(
-  'style.c',
+  'stylesheet.c',
   'strip/unity-strip.c',
   'popup/unity-base-popup.c',
   'popup/unity-dialog-popup.c',

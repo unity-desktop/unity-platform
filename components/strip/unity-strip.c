@@ -9,19 +9,27 @@
 
 #include <gdesktop-enums.h>
 
-#include "style-private.h"
+#include "stylesheet-private.h"
 
 #define INTERFACE_SCHEMA "org.gnome.desktop.interface"
 #define KEY_COLOR_SCHEME "color-scheme"
 
-G_DEFINE_TYPE (UnityStrip, unity_strip, ASTAL_TYPE_WINDOW)
+typedef struct
+{
+  gchar *stylesheet;
+} UnityStripPrivate;
+
+G_DEFINE_TYPE_WITH_PRIVATE (UnityStrip, unity_strip, ASTAL_TYPE_WINDOW)
+
+#define PRIV(o) ((UnityStripPrivate *) unity_strip_get_instance_private (UNITY_STRIP (o)))
 
 typedef enum
 {
   PROP_COLOR_SCHEME = 1,
+  PROP_STYLESHEET,
 } UnityStripProperty;
 
-static GParamSpec *properties[PROP_COLOR_SCHEME + 1];
+static GParamSpec *properties[PROP_STYLESHEET + 1];
 
 static GSettings *
 platform_settings (void)
@@ -114,6 +122,8 @@ unity_strip_realize (GtkWidget *widget)
   GTK_WIDGET_CLASS (unity_strip_parent_class)->realize (widget);
 
   unity_platform_style_ensure (gtk_widget_get_display (widget));
+  if (PRIV (self)->stylesheet != NULL)
+    unity_platform_load_stylesheet (gtk_widget_get_display (widget), PRIV (self)->stylesheet);
 
   g_signal_connect_object (platform_settings (), "changed::" KEY_COLOR_SCHEME,
                            G_CALLBACK (on_settings_scheme_changed), self,
@@ -135,7 +145,36 @@ unity_strip_get_property (GObject    *object,
     case PROP_COLOR_SCHEME:
       g_value_set_int (value, unity_strip_get_color_scheme (self));
       break;
+    case PROP_STYLESHEET:
+      g_value_set_string (value, PRIV (self)->stylesheet);
+      break;
     }
+}
+
+static void
+unity_strip_set_property (GObject      *object,
+                          guint         prop_id,
+                          const GValue *value,
+                          GParamSpec   *pspec)
+{
+  UnityStrip *self = UNITY_STRIP (object);
+
+  switch ((UnityStripProperty) prop_id)
+    {
+    case PROP_COLOR_SCHEME:
+      break;
+    case PROP_STYLESHEET:
+      g_free (PRIV (self)->stylesheet);
+      PRIV (self)->stylesheet = g_value_dup_string (value);
+      break;
+    }
+}
+
+static void
+unity_strip_finalize (GObject *object)
+{
+  g_free (PRIV (object)->stylesheet);
+  G_OBJECT_CLASS (unity_strip_parent_class)->finalize (object);
 }
 
 static void
@@ -145,6 +184,8 @@ unity_strip_class_init (UnityStripClass *klass)
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
 
   object_class->get_property = unity_strip_get_property;
+  object_class->set_property = unity_strip_set_property;
+  object_class->finalize     = unity_strip_finalize;
 
   widget_class->realize = unity_strip_realize;
 
@@ -153,6 +194,9 @@ unity_strip_class_init (UnityStripClass *klass)
     G_DESKTOP_COLOR_SCHEME_DEFAULT, G_MAXINT,
     G_DESKTOP_COLOR_SCHEME_DEFAULT,
     G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  properties[PROP_STYLESHEET] = g_param_spec_string (
+    "stylesheet", NULL, NULL, NULL,
+    G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, G_N_ELEMENTS (properties), properties);
 }

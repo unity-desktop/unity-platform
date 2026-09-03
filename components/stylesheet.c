@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include "style-private.h"
+#include "stylesheet-private.h"
 
 #include <gdesktop-enums.h>
 
@@ -62,4 +62,20 @@ unity_platform_style_ensure (GdkDisplay *display)
                            G_CONNECT_SWAPPED);
 
   g_object_set_qdata_full (G_OBJECT (display), provider_quark, provider, g_object_unref);
+}
+
+void
+unity_platform_load_stylesheet (GdkDisplay *display, const gchar *resource_path)
+{
+  g_return_if_fail (GDK_IS_DISPLAY (display));
+  g_return_if_fail (resource_path != NULL);
+
+  if (!g_resources_get_info (resource_path, G_RESOURCE_LOOKUP_FLAGS_NONE, NULL, NULL, NULL))
+    return;
+
+  g_autoptr (GtkCssProvider) provider = gtk_css_provider_new ();
+  gtk_css_provider_load_from_resource (provider, resource_path);
+  gtk_style_context_add_provider_for_display (
+    display, GTK_STYLE_PROVIDER (provider),
+    GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 }

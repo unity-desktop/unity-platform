@@ -37,15 +37,6 @@ pkgconfig.generate(
   requires: deps,
 )
 
-executable(
-  'unity-quit',
-  files('unity-quit-cli.c'),
-  dependencies: deps,
-  link_with: lib,
-  include_directories: incs,
-  install: true,
-)
-
 gnome.generate_gir(
   lib,
   sources: sources + headers,

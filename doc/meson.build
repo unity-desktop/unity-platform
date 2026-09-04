@@ -90,3 +90,42 @@ if get_option('build-quit')
     suite: 'doc',
   )
 endif
+
+if get_option('build-wlr')
+  wlr_toml = configure_file(
+    input: 'unity-platform-wlr.toml.in',
+    output: 'unity-platform-wlr.toml',
+    configuration: {'VERSION': meson.project_version()},
+  )
+
+  custom_target('unity-platform-wlr-doc',
+    input: [wlr_toml, unity_platform_wlr_gir[0]],
+    output: 'unity-platform-wlr',
+    command: [
+      gidocgen,
+      'generate',
+      '--quiet',
+      '--no-namespace-dir',
+      '--config=@INPUT0@',
+      '--output-dir=@OUTPUT@',
+      '--content-dir=@0@'.format(meson.current_source_dir()),
+      '@INPUT1@',
+    ],
+    depend_files: files('urlmap.js'),
+    build_by_default: true,
+    install: true,
+    install_dir: get_option('datadir') / 'doc' / meson.project_name(),
+  )
+
+  test('doc-check-wlr',
+    gidocgen,
+    args: [
+      'check',
+      '--config=@0@'.format(wlr_toml),
+      '--add-include-path=@0@'.format(meson.current_build_dir() / '../wlr'),
+      unity_platform_wlr_gir[0],
+    ],
+    depends: unity_platform_wlr_gir[0],
+    suite: 'doc',
+  )
+endif

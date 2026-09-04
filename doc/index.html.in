@@ -18,6 +18,7 @@
   <ul>
     <li><a href="./unity-platform-components/">UnityPlatformComponents</a></li>
     <li><a href="./unity-platform-quit/">UnityPlatformQuit</a></li>
+    <li><a href="./unity-platform-wlr/">UnityPlatformWlr</a></li>
   </ul>
 </body>
 </html>

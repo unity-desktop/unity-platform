@@ -34,6 +34,10 @@ if get_option('build-wlr')
   subdir('wlr')
 endif
 
+if get_option('build-backgrounds')
+  subdir('backgrounds')
+endif
+
 if get_option('documentation')
   subdir('doc')
 endif

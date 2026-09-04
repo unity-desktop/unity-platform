@@ -26,7 +26,7 @@ jobs:
             meson ninja-build gcc pkgconf-pkg-config git \
             glib2-devel gobject-introspection-devel \
             gtk4-layer-shell-devel gtk4-devel libadwaita-devel \
-            gi-docgen libsystemd-devel
+            gi-docgen systemd-devel
 
       - uses: actions/checkout@v4
 

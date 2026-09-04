@@ -5,6 +5,7 @@ deps = [
   dependency('gio-2.0'),
   dependency('gio-unix-2.0'),
   dependency('gobject-2.0'),
+  dependency('libdex-1'),
   dependency('libsystemd'),
 ]
 
@@ -44,7 +45,7 @@ unity_platform_quit_gir = gnome.generate_gir(
   nsversion: meson.project_version(),
   identifier_prefix: 'Unity',
   symbol_prefix: 'unity',
-  includes: ['Gio-2.0'],
+  includes: ['Gio-2.0', 'Dex-1'],
   dependencies: deps,
   header: 'unity-quit.h',
   include_directories: incs,

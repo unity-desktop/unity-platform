@@ -9,6 +9,7 @@
 
 #include <gio/gio.h>
 #include <glib-object.h>
+#include <libdex.h>
 
 G_BEGIN_DECLS
 
@@ -35,106 +36,100 @@ UnityQuit *unity_quit_get_default (void);
  * @self: a #UnityQuit
  *
  * Requests suspend through logind.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the call.
  */
-void unity_quit_suspend                    (UnityQuit *self);
+DexFuture *unity_quit_suspend                    (UnityQuit *self);
 /**
  * unity_quit_hibernate:
  * @self: a #UnityQuit
  *
  * Requests hibernation through logind.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the call.
  */
-void unity_quit_hibernate                  (UnityQuit *self);
+DexFuture *unity_quit_hibernate                  (UnityQuit *self);
 /**
  * unity_quit_power_off:
  * @self: a #UnityQuit
  *
  * Requests power off through logind.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the call.
  */
-void unity_quit_power_off                  (UnityQuit *self);
+DexFuture *unity_quit_power_off                  (UnityQuit *self);
 /**
  * unity_quit_reboot:
  * @self: a #UnityQuit
  *
  * Requests reboot through logind.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the call.
  */
-void unity_quit_reboot                     (UnityQuit *self);
+DexFuture *unity_quit_reboot                     (UnityQuit *self);
 /**
  * unity_quit_reboot_to_firmware_setup:
  * @self: a #UnityQuit
  *
  * Requests reboot into firmware setup.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the reboot.
  */
-void unity_quit_reboot_to_firmware_setup   (UnityQuit *self);
+DexFuture *unity_quit_reboot_to_firmware_setup   (UnityQuit *self);
 /**
  * unity_quit_reboot_to_boot_loader_menu:
  * @self: a #UnityQuit
  *
  * Requests reboot into the boot loader menu.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the reboot.
  */
-void unity_quit_reboot_to_boot_loader_menu (UnityQuit *self);
+DexFuture *unity_quit_reboot_to_boot_loader_menu (UnityQuit *self);
 /**
  * unity_quit_lock:
  * @self: a #UnityQuit
  *
  * Requests locking the current user session.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the call.
  */
-void unity_quit_lock                       (UnityQuit *self);
+DexFuture *unity_quit_lock                       (UnityQuit *self);
 /**
  * unity_quit_logout:
  * @self: a #UnityQuit
  *
  * Requests termination of the current user session.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves when logind acknowledges the call.
  */
-void unity_quit_logout                     (UnityQuit *self);
+DexFuture *unity_quit_logout                     (UnityQuit *self);
 
 /**
  * unity_quit_refresh:
  * @self: a #UnityQuit
  *
  * Refreshes cached capability state from logind.
- */
-void unity_quit_refresh                    (UnityQuit *self);
-/**
- * unity_quit_flush:
- * @self: a #UnityQuit
  *
- * Blocks until pending asynchronous calls complete.
+ * Returns: (transfer full): a #DexFuture that resolves once every capability query completes.
  */
-void unity_quit_flush                      (UnityQuit *self);
+DexFuture *unity_quit_refresh                    (UnityQuit *self);
 
 /**
- * unity_quit_inhibit_async:
+ * unity_quit_inhibit:
  * @self: a #UnityQuit
  * @what: inhibitor target category
  * @who: requester identity
  * @why: reason text
  * @mode: inhibitor mode
- * @cancellable: (nullable): optional cancellable
- * @callback: callback for completion
- * @user_data: user data for @callback
  *
- * Requests a logind inhibitor lock asynchronously.
+ * Requests a logind inhibitor lock.
+ *
+ * Returns: (transfer full): a #DexFuture that resolves to the inhibitor lock file descriptor.
  */
-void unity_quit_inhibit_async              (UnityQuit           *self,
-                                            const gchar         *what,
-                                            const gchar         *who,
-                                            const gchar         *why,
-                                            const gchar         *mode,
-                                            GCancellable        *cancellable,
-                                            GAsyncReadyCallback  callback,
-                                            gpointer             user_data);
-/**
- * unity_quit_inhibit_finish:
- * @self: a #UnityQuit
- * @result: result from #unity_quit_inhibit_async
- * @error: (nullable): return location for a #GError
- *
- * Finishes #unity_quit_inhibit_async.
- *
- * Returns: the inhibitor lock file descriptor, or -1 on error.
- */
-gint unity_quit_inhibit_finish             (UnityQuit    *self,
-                                            GAsyncResult *result,
-                                            GError      **error);
+DexFuture *unity_quit_inhibit                    (UnityQuit   *self,
+                                                  const gchar *what,
+                                                  const gchar *who,
+                                                  const gchar *why,
+                                                  const gchar *mode);
 
 G_END_DECLS

@@ -13,13 +13,11 @@ deps = [
 sources = files(
   'stylesheet.c',
   'strip/unity-strip.c',
-  'popup/unity-base-popup.c',
   'popup/unity-dialog-popup.c',
   'popup/unity-window-popup.c',
 )
 headers = files(
   'strip/unity-strip.h',
-  'popup/unity-base-popup.h',
   'popup/unity-dialog-popup.h',
   'popup/unity-window-popup.h',
 )

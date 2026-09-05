@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <unity-base-popup.h>
+#include <unity-dialog-popup.h>
 
 G_BEGIN_DECLS
 
@@ -22,11 +22,11 @@ G_DECLARE_DERIVABLE_TYPE (UnityWindowPopup,
                           unity_window_popup,
                           UNITY,
                           WINDOW_POPUP,
-                          UnityBasePopup)
+                          UnityDialogPopup)
 
 struct _UnityWindowPopupClass
 {
-  UnityBasePopupClass parent_class;
+  UnityDialogPopupClass parent_class;
 
   gpointer            padding[8];
 };

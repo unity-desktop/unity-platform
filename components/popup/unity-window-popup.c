@@ -15,7 +15,7 @@ typedef struct
   gboolean maximized;
 } UnityWindowPopupPrivate;
 
-G_DEFINE_TYPE_WITH_PRIVATE (UnityWindowPopup, unity_window_popup, UNITY_TYPE_BASE_POPUP)
+G_DEFINE_TYPE_WITH_PRIVATE (UnityWindowPopup, unity_window_popup, UNITY_TYPE_DIALOG_POPUP)
 
 #define PRIV(o) ((UnityWindowPopupPrivate *) unity_window_popup_get_instance_private (UNITY_WINDOW_POPUP (o)))
 
@@ -225,8 +225,6 @@ unity_window_popup_init (UnityWindowPopup *self)
 
   priv->size_ratio = 2.0 / 3.0;
   priv->maximized  = FALSE;
-
-  gtk_widget_add_css_class (GTK_WIDGET (self), "unity-window-popup-overlay");
 
   g_signal_connect (self, "map", G_CALLBACK (on_map), NULL);
 }

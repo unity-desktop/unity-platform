@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <unity-base-popup.h>
+#include <adwaita.h>
+#include <astal-4.h>
 
 G_BEGIN_DECLS
 
@@ -16,38 +17,35 @@ G_BEGIN_DECLS
 /**
  * UnityDialogPopup:
  *
- * Popup variant with a titled dialog template and replaceable content area.
+ * Popup window with dismiss behavior, keyboard-exclusive keymode,
+ * and optional per-instance stylesheet.
  */
 G_DECLARE_DERIVABLE_TYPE (UnityDialogPopup,
                           unity_dialog_popup,
                           UNITY,
                           DIALOG_POPUP,
-                          UnityBasePopup)
+                          AstalWindow)
 
 struct _UnityDialogPopupClass
 {
-  UnityBasePopupClass parent_class;
+  AstalWindowClass parent_class;
 
-  gpointer            padding[8];
+  gpointer         padding[8];
 };
 
 /**
- * unity_dialog_popup_get_content:
+ * unity_dialog_popup_get_dismissable:
  * @self: a #UnityDialogPopup
  *
- * Gets the current dialog content widget.
- *
- * Returns: (transfer none) (nullable): the current content widget.
+ * Returns: %TRUE if dismissable.
  */
-GtkWidget *unity_dialog_popup_get_content (UnityDialogPopup *self);
+gboolean unity_dialog_popup_get_dismissable (UnityDialogPopup *self);
 /**
- * unity_dialog_popup_set_content:
+ * unity_dialog_popup_set_dismissable:
  * @self: a #UnityDialogPopup
- * @content: (nullable): content widget to show in the dialog
- *
- * Sets the dialog content widget.
+ * @dismissable: whether dismissal by focus/escape/outside-click is enabled
  */
-void       unity_dialog_popup_set_content (UnityDialogPopup *self,
-                                           GtkWidget        *content);
+void     unity_dialog_popup_set_dismissable (UnityDialogPopup *self,
+                                             gboolean          dismissable);
 
 G_END_DECLS

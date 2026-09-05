@@ -2,6 +2,5 @@
 <gresources>
   <gresource prefix="/org/unity/platform/components">
     <file compressed="true">components.css</file>
-    <file compressed="true">popup/unity-dialog-popup.ui</file>
   </gresource>
 </gresources>

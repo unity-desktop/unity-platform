@@ -13,6 +13,8 @@ typedef struct
 {
   gdouble  size_ratio;
   gboolean maximized;
+  GtkAlign content_halign;
+  GtkAlign content_valign;
 } UnityWindowPopupPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (UnityWindowPopup, unity_window_popup, UNITY_TYPE_DIALOG_POPUP)
@@ -23,9 +25,11 @@ typedef enum
 {
   PROP_SIZE_RATIO = 1,
   PROP_MAXIMIZED,
+  PROP_CONTENT_HALIGN,
+  PROP_CONTENT_VALIGN,
 } UnityWindowPopupProperty;
 
-static GParamSpec *properties[PROP_MAXIMIZED + 1];
+static GParamSpec *properties[PROP_CONTENT_VALIGN + 1];
 
 static void
 apply_layout (UnityWindowPopup *self)
@@ -54,8 +58,8 @@ apply_layout (UnityWindowPopup *self)
     }
 
   gtk_widget_remove_css_class (child, "maximized");
-  gtk_widget_set_halign  (child, GTK_ALIGN_START);
-  gtk_widget_set_valign  (child, GTK_ALIGN_START);
+  gtk_widget_set_halign  (child, priv->content_halign);
+  gtk_widget_set_valign  (child, priv->content_valign);
   gtk_widget_set_hexpand (child, FALSE);
   gtk_widget_set_vexpand (child, FALSE);
 
@@ -136,6 +140,42 @@ unity_window_popup_set_maximized (UnityWindowPopup *self, gboolean maximized)
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_MAXIMIZED]);
 }
 
+GtkAlign
+unity_window_popup_get_content_halign (UnityWindowPopup *self)
+{
+  g_return_val_if_fail (UNITY_IS_WINDOW_POPUP (self), GTK_ALIGN_START);
+  return PRIV (self)->content_halign;
+}
+
+void
+unity_window_popup_set_content_halign (UnityWindowPopup *self, GtkAlign halign)
+{
+  g_return_if_fail (UNITY_IS_WINDOW_POPUP (self));
+  if (PRIV (self)->content_halign == halign)
+    return;
+  PRIV (self)->content_halign = halign;
+  apply_layout (self);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_CONTENT_HALIGN]);
+}
+
+GtkAlign
+unity_window_popup_get_content_valign (UnityWindowPopup *self)
+{
+  g_return_val_if_fail (UNITY_IS_WINDOW_POPUP (self), GTK_ALIGN_START);
+  return PRIV (self)->content_valign;
+}
+
+void
+unity_window_popup_set_content_valign (UnityWindowPopup *self, GtkAlign valign)
+{
+  g_return_if_fail (UNITY_IS_WINDOW_POPUP (self));
+  if (PRIV (self)->content_valign == valign)
+    return;
+  PRIV (self)->content_valign = valign;
+  apply_layout (self);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_CONTENT_VALIGN]);
+}
+
 static void
 unity_window_popup_constructed (GObject *object)
 {
@@ -164,6 +204,12 @@ unity_window_popup_get_property (GObject *object, guint prop_id, GValue *value, 
     case PROP_MAXIMIZED:
       g_value_set_boolean (value, unity_window_popup_get_maximized (self));
       break;
+    case PROP_CONTENT_HALIGN:
+      g_value_set_enum (value, unity_window_popup_get_content_halign (self));
+      break;
+    case PROP_CONTENT_VALIGN:
+      g_value_set_enum (value, unity_window_popup_get_content_valign (self));
+      break;
     }
 }
 
@@ -179,6 +225,12 @@ unity_window_popup_set_property (GObject *object, guint prop_id, const GValue *v
       break;
     case PROP_MAXIMIZED:
       unity_window_popup_set_maximized (self, g_value_get_boolean (value));
+      break;
+    case PROP_CONTENT_HALIGN:
+      unity_window_popup_set_content_halign (self, g_value_get_enum (value));
+      break;
+    case PROP_CONTENT_VALIGN:
+      unity_window_popup_set_content_valign (self, g_value_get_enum (value));
       break;
     }
 }
@@ -211,6 +263,24 @@ unity_window_popup_class_init (UnityWindowPopupClass *klass)
   properties[PROP_MAXIMIZED] = g_param_spec_boolean (
     "maximized", NULL, NULL, FALSE,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  /**
+   * UnityWindowPopup:content-halign:
+   *
+   * Horizontal alignment applied to the popup's content when not maximized.
+   * Lets callers pin the ratio-sized content to an edge of the layer-shell
+   * surface. Maximized mode always fills.
+   */
+  properties[PROP_CONTENT_HALIGN] = g_param_spec_enum (
+    "content-halign", NULL, NULL, GTK_TYPE_ALIGN, GTK_ALIGN_START,
+    G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  /**
+   * UnityWindowPopup:content-valign:
+   *
+   * Vertical alignment applied to the popup's content when not maximized.
+   */
+  properties[PROP_CONTENT_VALIGN] = g_param_spec_enum (
+    "content-valign", NULL, NULL, GTK_TYPE_ALIGN, GTK_ALIGN_START,
+    G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, G_N_ELEMENTS (properties), properties);
 
@@ -223,8 +293,10 @@ unity_window_popup_init (UnityWindowPopup *self)
 {
   UnityWindowPopupPrivate *priv = PRIV (self);
 
-  priv->size_ratio = 2.0 / 3.0;
-  priv->maximized  = FALSE;
+  priv->size_ratio     = 2.0 / 3.0;
+  priv->maximized      = FALSE;
+  priv->content_halign = GTK_ALIGN_START;
+  priv->content_valign = GTK_ALIGN_START;
 
   g_signal_connect (self, "map", G_CALLBACK (on_map), NULL);
 }

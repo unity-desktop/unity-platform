@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <gtk/gtk.h>
 #include <unity-dialog-popup.h>
 
 G_BEGIN_DECLS
@@ -68,5 +69,43 @@ gboolean unity_window_popup_get_maximized  (UnityWindowPopup *self);
  */
 void     unity_window_popup_set_maximized  (UnityWindowPopup *self,
                                             gboolean          maximized);
+
+/**
+ * unity_window_popup_get_content_halign:
+ * @self: a #UnityWindowPopup
+ *
+ * Returns: the horizontal alignment applied to the popup's content while it
+ *   is not maximized.
+ */
+GtkAlign unity_window_popup_get_content_halign (UnityWindowPopup *self);
+/**
+ * unity_window_popup_set_content_halign:
+ * @self: a #UnityWindowPopup
+ * @halign: horizontal alignment to apply to the content when not maximized
+ *
+ * Positions the ratio-sized content within the layer-shell surface along the
+ * horizontal axis. Maximized mode always fills.
+ */
+void     unity_window_popup_set_content_halign (UnityWindowPopup *self,
+                                                GtkAlign          halign);
+
+/**
+ * unity_window_popup_get_content_valign:
+ * @self: a #UnityWindowPopup
+ *
+ * Returns: the vertical alignment applied to the popup's content while it
+ *   is not maximized.
+ */
+GtkAlign unity_window_popup_get_content_valign (UnityWindowPopup *self);
+/**
+ * unity_window_popup_set_content_valign:
+ * @self: a #UnityWindowPopup
+ * @valign: vertical alignment to apply to the content when not maximized
+ *
+ * Positions the ratio-sized content within the layer-shell surface along the
+ * vertical axis. Maximized mode always fills.
+ */
+void     unity_window_popup_set_content_valign (UnityWindowPopup *self,
+                                                GtkAlign          valign);
 
 G_END_DECLS

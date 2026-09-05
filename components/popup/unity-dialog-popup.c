@@ -7,15 +7,27 @@
 
 #include "unity-dialog-popup.h"
 
+#include <gsound.h>
+
 #include "stylesheet-private.h"
 
 typedef struct
 {
-  gboolean  dismissable;
-  gchar    *stylesheet;
+  gboolean                 dismissable;
+  gchar                   *stylesheet;
+
+  UnityDialogPopupUrgency  urgency;
+  GSoundContext           *sound;
 } UnityDialogPopupPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (UnityDialogPopup, unity_dialog_popup, ASTAL_TYPE_WINDOW)
+
+G_DEFINE_ENUM_TYPE (UnityDialogPopupUrgency, unity_dialog_popup_urgency,
+                    G_DEFINE_ENUM_VALUE (UNITY_DIALOG_POPUP_URGENCY_NONE,     "none"),
+                    G_DEFINE_ENUM_VALUE (UNITY_DIALOG_POPUP_URGENCY_INFO,     "info"),
+                    G_DEFINE_ENUM_VALUE (UNITY_DIALOG_POPUP_URGENCY_QUESTION, "question"),
+                    G_DEFINE_ENUM_VALUE (UNITY_DIALOG_POPUP_URGENCY_WARNING,  "warning"),
+                    G_DEFINE_ENUM_VALUE (UNITY_DIALOG_POPUP_URGENCY_CRITICAL, "critical"))
 
 #define PRIV(o) ((UnityDialogPopupPrivate *) unity_dialog_popup_get_instance_private (UNITY_DIALOG_POPUP (o)))
 
@@ -23,9 +35,10 @@ typedef enum
 {
   PROP_DISMISSABLE = 1,
   PROP_STYLESHEET,
+  PROP_URGENCY,
 } UnityDialogPopupProperty;
 
-static GParamSpec *properties[PROP_STYLESHEET + 1];
+static GParamSpec *properties[PROP_URGENCY + 1];
 
 typedef enum
 {
@@ -33,6 +46,14 @@ typedef enum
 } UnityDialogPopupSignal;
 
 static guint signals[SIGNAL_CLOSED + 1];
+
+static const gchar *urgency_event_id[] = {
+  [UNITY_DIALOG_POPUP_URGENCY_NONE]     = NULL,
+  [UNITY_DIALOG_POPUP_URGENCY_INFO]     = "dialog-information",
+  [UNITY_DIALOG_POPUP_URGENCY_QUESTION] = "window-question",
+  [UNITY_DIALOG_POPUP_URGENCY_WARNING]  = "dialog-warning",
+  [UNITY_DIALOG_POPUP_URGENCY_CRITICAL] = "dialog-error",
+};
 
 gboolean
 unity_dialog_popup_get_dismissable (UnityDialogPopup *self)
@@ -51,6 +72,25 @@ unity_dialog_popup_set_dismissable (UnityDialogPopup *self, gboolean dismissable
 
   PRIV (self)->dismissable = dismissable;
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_DISMISSABLE]);
+}
+
+UnityDialogPopupUrgency
+unity_dialog_popup_get_urgency (UnityDialogPopup *self)
+{
+  g_return_val_if_fail (UNITY_IS_DIALOG_POPUP (self), UNITY_DIALOG_POPUP_URGENCY_NONE);
+  return PRIV (self)->urgency;
+}
+
+void
+unity_dialog_popup_set_urgency (UnityDialogPopup       *self,
+                                UnityDialogPopupUrgency urgency)
+{
+  g_return_if_fail (UNITY_IS_DIALOG_POPUP (self));
+  if (PRIV (self)->urgency == urgency)
+    return;
+
+  PRIV (self)->urgency = urgency;
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_URGENCY]);
 }
 
 static gboolean
@@ -107,12 +147,55 @@ on_outside_pressed (GtkGestureClick *gesture, gint n_press, gdouble x, gdouble y
     gtk_gesture_set_state (GTK_GESTURE (gesture), GTK_EVENT_SEQUENCE_CLAIMED);
 }
 
+static void
+on_sound_played (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+  g_autoptr (GError) error = NULL;
+
+  if (!gsound_context_play_full_finish (GSOUND_CONTEXT (source), result, &error) &&
+      !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    g_warning ("unity-dialog-popup: play failed: %s", error->message);
+}
+
+static void
+maybe_play_urgency (UnityDialogPopup *self)
+{
+  UnityDialogPopupPrivate *priv  = PRIV (self);
+  GtkApplication          *app;
+  const gchar             *event;
+  const gchar             *app_id = NULL;
+
+  if (priv->urgency == UNITY_DIALOG_POPUP_URGENCY_NONE || priv->sound == NULL)
+    return;
+
+  event = urgency_event_id[priv->urgency];
+  if (event == NULL)
+    return;
+
+  app = gtk_window_get_application (GTK_WINDOW (self));
+  if (app != NULL)
+    app_id = g_application_get_application_id (G_APPLICATION (app));
+
+  gsound_context_play_full (priv->sound, NULL, on_sound_played, NULL,
+                            GSOUND_ATTR_EVENT_ID,       event,
+                            GSOUND_ATTR_MEDIA_ROLE,     "event",
+                            GSOUND_ATTR_APPLICATION_ID, app_id != NULL ? app_id : "org.unity.DialogPopup",
+                            NULL);
+}
+
 static gboolean
 unity_dialog_popup_close_request (GtkWindow *window)
 {
   gtk_widget_set_visible (GTK_WIDGET (window), FALSE);
   g_signal_emit (window, signals[SIGNAL_CLOSED], 0);
   return GDK_EVENT_STOP;
+}
+
+static void
+unity_dialog_popup_map (GtkWidget *widget)
+{
+  GTK_WIDGET_CLASS (unity_dialog_popup_parent_class)->map (widget);
+  maybe_play_urgency (UNITY_DIALOG_POPUP (widget));
 }
 
 static void
@@ -152,6 +235,9 @@ unity_dialog_popup_get_property (GObject *object, guint prop_id, GValue *value, 
     case PROP_STYLESHEET:
       g_value_set_string (value, PRIV (self)->stylesheet);
       break;
+    case PROP_URGENCY:
+      g_value_set_enum (value, unity_dialog_popup_get_urgency (self));
+      break;
     }
 }
 
@@ -169,13 +255,20 @@ unity_dialog_popup_set_property (GObject *object, guint prop_id, const GValue *v
       g_free (PRIV (self)->stylesheet);
       PRIV (self)->stylesheet = g_value_dup_string (value);
       break;
+    case PROP_URGENCY:
+      unity_dialog_popup_set_urgency (self, g_value_get_enum (value));
+      break;
     }
 }
 
 static void
 unity_dialog_popup_finalize (GObject *object)
 {
-  g_free (PRIV (object)->stylesheet);
+  UnityDialogPopupPrivate *priv = PRIV (object);
+
+  g_clear_pointer (&priv->stylesheet, g_free);
+  g_clear_object  (&priv->sound);
+
   G_OBJECT_CLASS (unity_dialog_popup_parent_class)->finalize (object);
 }
 
@@ -192,6 +285,7 @@ unity_dialog_popup_class_init (UnityDialogPopupClass *klass)
   object_class->finalize     = unity_dialog_popup_finalize;
 
   widget_class->realize = unity_dialog_popup_realize;
+  widget_class->map     = unity_dialog_popup_map;
   window_class->close_request = unity_dialog_popup_close_request;
 
   /**
@@ -210,6 +304,17 @@ unity_dialog_popup_class_init (UnityDialogPopupClass *klass)
   properties[PROP_STYLESHEET] = g_param_spec_string (
     "stylesheet", NULL, NULL, NULL,
     G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+  /**
+   * UnityDialogPopup:urgency:
+   *
+   * Sound cue tone played when the popup becomes visible. Defaults to
+   * %UNITY_DIALOG_POPUP_URGENCY_NONE (silent). Failed sound-server
+   * initialisation is non-fatal — the popup stays silent.
+   */
+  properties[PROP_URGENCY] = g_param_spec_enum (
+    "urgency", NULL, NULL,
+    UNITY_TYPE_DIALOG_POPUP_URGENCY, UNITY_DIALOG_POPUP_URGENCY_NONE,
+    G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, G_N_ELEMENTS (properties), properties);
 
@@ -236,10 +341,13 @@ unity_dialog_popup_class_init (UnityDialogPopupClass *klass)
 static void
 unity_dialog_popup_init (UnityDialogPopup *self)
 {
-  GtkGesture         *click;
-  GtkEventController *focus;
+  UnityDialogPopupPrivate *priv = PRIV (self);
+  GtkGesture              *click;
+  GtkEventController      *focus;
 
-  PRIV (self)->dismissable = TRUE;
+  priv->dismissable = TRUE;
+  priv->urgency     = UNITY_DIALOG_POPUP_URGENCY_NONE;
+  priv->sound       = gsound_context_new (NULL, NULL);
 
   gtk_widget_add_css_class (GTK_WIDGET (self), "unity-popup");
 

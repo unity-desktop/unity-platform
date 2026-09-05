@@ -4,6 +4,7 @@ deps = [
   dependency('gtk4-layer-shell-0', version: '>= 1.0'),
   dependency('glib-2.0'),
   dependency('gobject-2.0'),
+  dependency('gsound'),
   dependency('gtk4', version: '>= 4.20'),
   dependency('libadwaita-1', version: '>= 1.9'),
   dependency('astal-4-4.0'),

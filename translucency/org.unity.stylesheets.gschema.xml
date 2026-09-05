@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.unity.stylesheets" path="/org/unity/stylesheets/" gettext-domain="unity-stylesheets">
+
+    <key name="translucency" type="b">
+      <default>false</default>
+      <summary>Show translucent surfaces</summary>
+      <description>
+        Draw panels, popovers, dialogs and windows with a translucent fill.
+        When the compositor supports it, the area behind them is blurred
+        rather than simply see-through.
+      </description>
+    </key>
+
+  </schema>
+</schemalist>

@@ -1,0 +1,22 @@
+window,
+floating-sheet > sheet,
+dialog-host > dialog.background > sheet,
+dialog-host > dialog.view       > sheet,
+dialog-host > dialog.osd        > sheet,
+popover > contents,
+popover > arrow {
+  background-color: alpha(var(--window-bg-color), 0.7);
+  backdrop-filter: blur(24px);
+}
+
+toolbarview > .top-bar.raised,
+toolbarview > .bottom-bar.raised {
+  background-color: alpha(var(--window-bg-color), 0.2);
+  backdrop-filter: blur(24px);
+}
+
+.card,
+.boxed-list {
+  background-color: alpha(var(--card-bg-color), 0.6);
+  backdrop-filter: blur(24px);
+}

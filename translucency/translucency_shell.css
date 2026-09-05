@@ -1,0 +1,8 @@
+.unity-popup {
+  background: none;
+}
+
+.unity-popup > * {
+  background-color: alpha(var(--window-bg-color), 0.7);
+  backdrop-filter: blur(24px);
+}

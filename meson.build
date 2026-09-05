@@ -38,6 +38,10 @@ if get_option('build-backgrounds')
   subdir('backgrounds')
 endif
 
+if get_option('build-translucency')
+  subdir('translucency')
+endif
+
 if get_option('documentation')
   subdir('doc')
 endif

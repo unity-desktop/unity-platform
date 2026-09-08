@@ -11,21 +11,26 @@ deps = [
   dependency('gsettings-desktop-schemas'),
 ]
 
+libm = meson.get_compiler('c').find_library('m', required: false)
+
 sources = files(
   'stylesheet.c',
   'strip/unity-strip.c',
   'popup/unity-dialog-popup.c',
   'popup/unity-window-popup.c',
+  'window/unity-window.c',
 )
 headers = files(
   'strip/unity-strip.h',
   'popup/unity-dialog-popup.h',
   'popup/unity-window-popup.h',
+  'window/unity-window.h',
 )
 incs = [
   include_directories('.'),
   include_directories('strip'),
   include_directories('popup'),
+  include_directories('window'),
 ]
 
 sources += gnome.compile_resources(
@@ -37,7 +42,7 @@ sources += gnome.compile_resources(
 lib = library(
   name,
   sources,
-  dependencies: deps,
+  dependencies: deps + [libm],
   include_directories: incs,
   version: meson.project_version(),
   soversion: '0',

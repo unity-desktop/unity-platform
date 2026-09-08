@@ -11,6 +11,11 @@
 
 #include "stylesheet-private.h"
 
+#define FADE_SPRING_DAMPING   1.0
+#define FADE_SPRING_STIFFNESS 500
+#define FADE_SPRING_MASS      1
+#define FADE_SPRING_EPSILON   0.01
+
 typedef struct
 {
   gboolean                 dismissable;
@@ -18,6 +23,10 @@ typedef struct
 
   UnityDialogPopupUrgency  urgency;
   GSoundContext           *sound;
+
+  AdwAnimation            *anim;
+  gdouble                  progress;
+  gboolean                 close_pending;
 } UnityDialogPopupPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (UnityDialogPopup, unity_dialog_popup, ASTAL_TYPE_WINDOW)
@@ -106,21 +115,18 @@ maybe_dismiss (UnityDialogPopup *self)
 static void
 close_action (GtkWidget *widget, const gchar *action_name, GVariant *parameter)
 {
-  (void) action_name; (void) parameter;
   gtk_window_close (GTK_WINDOW (widget));
 }
 
 static gboolean
 on_escape_pressed (GtkWidget *widget, GVariant *args, gpointer user_data)
 {
-  (void) args; (void) user_data;
   return maybe_dismiss (UNITY_DIALOG_POPUP (widget));
 }
 
 static void
 on_focus_leave (GtkEventControllerFocus *focus, gpointer user_data)
 {
-  (void) focus;
   maybe_dismiss (UNITY_DIALOG_POPUP (user_data));
 }
 
@@ -132,8 +138,6 @@ on_outside_pressed (GtkGestureClick *gesture, gint n_press, gdouble x, gdouble y
   GtkWidget        *area  = gtk_event_controller_get_widget (
     GTK_EVENT_CONTROLLER (gesture));
   GtkWidget        *child = gtk_window_get_child (GTK_WINDOW (self));
-
-  (void) n_press;
 
   if (child == NULL)
     return;
@@ -183,18 +187,56 @@ maybe_play_urgency (UnityDialogPopup *self)
                             NULL);
 }
 
+static void
+on_fade_progress (gdouble value, gpointer user_data)
+{
+  UnityDialogPopup *self  = user_data;
+  GtkWidget        *child = gtk_window_get_child (GTK_WINDOW (self));
+
+  PRIV (self)->progress = value;
+  if (child != NULL)
+    gtk_widget_set_opacity (child, CLAMP (value, 0.0, 1.0));
+}
+
+static void
+on_close_animation_done (UnityDialogPopup *self)
+{
+  UnityDialogPopupPrivate *priv = PRIV (self);
+
+  if (!priv->close_pending)
+    return;
+
+  priv->close_pending = FALSE;
+  gtk_widget_set_visible (GTK_WIDGET (self), FALSE);
+  g_signal_emit (self, signals[SIGNAL_CLOSED], 0);
+}
+
 static gboolean
 unity_dialog_popup_close_request (GtkWindow *window)
 {
-  gtk_widget_set_visible (GTK_WIDGET (window), FALSE);
-  g_signal_emit (window, signals[SIGNAL_CLOSED], 0);
+  UnityDialogPopupPrivate *priv = PRIV (window);
+
+  if (priv->close_pending)
+    return GDK_EVENT_STOP;
+
+  priv->close_pending = TRUE;
+  adw_spring_animation_set_value_from (ADW_SPRING_ANIMATION (priv->anim), priv->progress);
+  adw_spring_animation_set_value_to   (ADW_SPRING_ANIMATION (priv->anim), 0.0);
+  adw_animation_play (priv->anim);
   return GDK_EVENT_STOP;
 }
 
 static void
 unity_dialog_popup_map (GtkWidget *widget)
 {
+  UnityDialogPopupPrivate *priv = PRIV (widget);
+
   GTK_WIDGET_CLASS (unity_dialog_popup_parent_class)->map (widget);
+
+  adw_spring_animation_set_value_from (ADW_SPRING_ANIMATION (priv->anim), priv->progress);
+  adw_spring_animation_set_value_to   (ADW_SPRING_ANIMATION (priv->anim), 1.0);
+  adw_animation_play (priv->anim);
+
   maybe_play_urgency (UNITY_DIALOG_POPUP (widget));
 }
 
@@ -262,6 +304,13 @@ unity_dialog_popup_set_property (GObject *object, guint prop_id, const GValue *v
 }
 
 static void
+unity_dialog_popup_dispose (GObject *object)
+{
+  g_clear_object (&PRIV (object)->anim);
+  G_OBJECT_CLASS (unity_dialog_popup_parent_class)->dispose (object);
+}
+
+static void
 unity_dialog_popup_finalize (GObject *object)
 {
   UnityDialogPopupPrivate *priv = PRIV (object);
@@ -282,6 +331,7 @@ unity_dialog_popup_class_init (UnityDialogPopupClass *klass)
   object_class->constructed  = unity_dialog_popup_constructed;
   object_class->get_property = unity_dialog_popup_get_property;
   object_class->set_property = unity_dialog_popup_set_property;
+  object_class->dispose      = unity_dialog_popup_dispose;
   object_class->finalize     = unity_dialog_popup_finalize;
 
   widget_class->realize = unity_dialog_popup_realize;
@@ -345,9 +395,21 @@ unity_dialog_popup_init (UnityDialogPopup *self)
   GtkGesture              *click;
   GtkEventController      *focus;
 
+  AdwAnimationTarget *target = adw_callback_animation_target_new (
+    on_fade_progress, self, NULL);
+  AdwSpringParams    *params = adw_spring_params_new (
+    FADE_SPRING_DAMPING, FADE_SPRING_MASS, FADE_SPRING_STIFFNESS);
+
   priv->dismissable = TRUE;
   priv->urgency     = UNITY_DIALOG_POPUP_URGENCY_NONE;
   priv->sound       = gsound_context_new (NULL, NULL);
+  priv->progress    = 0.0;
+
+  priv->anim = adw_spring_animation_new (GTK_WIDGET (self), 0.0, 1.0, params, target);
+  adw_spring_animation_set_epsilon (ADW_SPRING_ANIMATION (priv->anim), FADE_SPRING_EPSILON);
+  adw_spring_animation_set_clamp   (ADW_SPRING_ANIMATION (priv->anim), TRUE);
+  g_signal_connect_swapped (priv->anim, "done",
+                            G_CALLBACK (on_close_animation_done), self);
 
   gtk_widget_add_css_class (GTK_WIDGET (self), "unity-popup");
 

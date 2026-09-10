@@ -179,7 +179,7 @@ render_processed (UnityBackgroundsSource *self, gint width, gint height,
 
 gboolean
 unity_backgrounds_source_save_png (UnityBackgroundsSource *self,
-                                   const gchar            *dest,
+                                   const gchar * const    *dests,
                                    gint                    width,
                                    gint                    height,
                                    gdouble                 blur_radius,
@@ -187,7 +187,7 @@ unity_backgrounds_source_save_png (UnityBackgroundsSource *self,
                                    GError                **error)
 {
   g_return_val_if_fail (UNITY_BACKGROUNDS_IS_SOURCE (self), FALSE);
-  g_return_val_if_fail (dest != NULL, FALSE);
+  g_return_val_if_fail (dests != NULL && dests[0] != NULL, FALSE);
   g_return_val_if_fail (width > 0 && height > 0, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
@@ -202,10 +202,26 @@ unity_backgrounds_source_save_png (UnityBackgroundsSource *self,
   g_autoptr (GBytes) png = gdk_texture_save_to_png_bytes (texture);
   gsize len = 0;
   const gchar *data = g_bytes_get_data (png, &len);
-  return g_file_set_contents_full (dest, data, len,
-                                   G_FILE_SET_CONTENTS_CONSISTENT
-                                     | G_FILE_SET_CONTENTS_DURABLE,
-                                   0644, error);
+
+  gboolean wrote_all = TRUE;
+
+  for (gsize i = 0; dests[i] != NULL; i++)
+    {
+      /* One bad path must not cost the others. */
+      g_autoptr (GError) local = NULL;
+
+      if (g_file_set_contents_full (dests[i], data, len,
+                                    G_FILE_SET_CONTENTS_CONSISTENT
+                                      | G_FILE_SET_CONTENTS_DURABLE,
+                                    0644, &local))
+        continue;
+
+      wrote_all = FALSE;
+      if (error != NULL && *error == NULL)
+        g_propagate_error (error, g_steal_pointer (&local));
+    }
+
+  return wrote_all;
 }
 
 static void

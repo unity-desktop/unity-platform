@@ -38,19 +38,20 @@ gboolean                unity_backgrounds_source_has_wallpaper (UnityBackgrounds
 /**
  * unity_backgrounds_source_save_png:
  * @self: a #UnityBackgroundsSource
- * @dest: absolute output path
+ * @dests: (array zero-terminated=1) (element-type filename): output paths
  * @width: pixels
  * @height: pixels
  * @blur_radius: GSK blur radius, or 0 for no blur
  * @dim: overlay a 0.45-alpha black over the result
  * @error: (nullable): return location for a #GError
  *
- * Renders the wallpaper and writes it atomically as a PNG.
+ * Renders once, then writes the PNG atomically to every path at mode 0644.
+ * Every path is tried, so %FALSE means one failed, not that none was written.
  *
- * Returns: %TRUE on success.
+ * Returns: %TRUE when every path was written.
  */
 gboolean                unity_backgrounds_source_save_png      (UnityBackgroundsSource *self,
-                                                                const gchar            *dest,
+                                                                const gchar * const    *dests,
                                                                 gint                    width,
                                                                 gint                    height,
                                                                 gdouble                 blur_radius,

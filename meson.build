@@ -26,10 +26,6 @@ if get_option('build-components')
   subdir('components')
 endif
 
-if get_option('build-quit')
-  subdir('quit')
-endif
-
 if get_option('build-wlr')
   subdir('wlr')
 endif

@@ -8,6 +8,7 @@ deps = [
   dependency('glib-2.0', version: '>= 2.80'),
   dependency('gobject-2.0'),
   dependency('gnome-bg-4'),
+  dependency('libpng'),
   dependency('gsettings-desktop-schemas'),
 ]
 
@@ -50,7 +51,7 @@ unity_platform_backgrounds_dep = declare_dependency(
   dependencies: deps,
 )
 
-gnome.generate_gir(
+unity_platform_backgrounds_gir = gnome.generate_gir(
   unity_platform_backgrounds_lib,
   sources: sources + headers,
   namespace: 'UnityPlatformBackgrounds',

@@ -23,7 +23,9 @@ G_DECLARE_FINAL_TYPE (UnityBackgroundsSource, unity_backgrounds_source, UNITY_BA
 /**
  * unity_backgrounds_source_new:
  *
- * Returns: (transfer full): a new source following the desktop wallpaper settings.
+ * Creates a source that follows the desktop wallpaper settings.
+ *
+ * Returns: (transfer full): the new source
  */
 UnityBackgroundsSource *unity_backgrounds_source_new           (void);
 
@@ -31,31 +33,50 @@ UnityBackgroundsSource *unity_backgrounds_source_new           (void);
  * unity_backgrounds_source_has_wallpaper:
  * @self: a #UnityBackgroundsSource
  *
- * Returns: %TRUE unless the placement is `G_DESKTOP_BACKGROUND_STYLE_NONE`.
+ * Checks whether the desktop shows a wallpaper.
+ *
+ * Returns: %TRUE unless the placement is `G_DESKTOP_BACKGROUND_STYLE_NONE`
  */
 gboolean                unity_backgrounds_source_has_wallpaper (UnityBackgroundsSource *self);
 
 /**
- * unity_backgrounds_source_save_png:
+ * unity_backgrounds_source_save_png_async:
  * @self: a #UnityBackgroundsSource
  * @dests: (array zero-terminated=1) (element-type filename): output paths
  * @width: pixels
  * @height: pixels
  * @blur_radius: GSK blur radius, or 0 for no blur
  * @dim: overlay a 0.45-alpha black over the result
+ * @cancellable: (nullable): a #GCancellable
+ * @callback: (scope async): called when the write completes
+ * @user_data: data for @callback
+ *
+ * Derives the PNG from the shared wallpaper render, then encodes and writes it
+ * on a worker thread. Several calls share one render.
+ */
+void     unity_backgrounds_source_save_png_async  (UnityBackgroundsSource *self,
+                                                   const gchar * const    *dests,
+                                                   gint                    width,
+                                                   gint                    height,
+                                                   gdouble                 blur_radius,
+                                                   gboolean                dim,
+                                                   GCancellable           *cancellable,
+                                                   GAsyncReadyCallback     callback,
+                                                   gpointer                user_data);
+
+/**
+ * unity_backgrounds_source_save_png_finish:
+ * @self: a #UnityBackgroundsSource
+ * @result: a #GAsyncResult
  * @error: (nullable): return location for a #GError
  *
- * Renders once, then writes the PNG atomically to every path at mode 0644.
+ * Finishes [method@BackgroundsSource.save_png_async].
  * Every path is tried, so %FALSE means one failed, not that none was written.
  *
  * Returns: %TRUE when every path was written.
  */
-gboolean                unity_backgrounds_source_save_png      (UnityBackgroundsSource *self,
-                                                                const gchar * const    *dests,
-                                                                gint                    width,
-                                                                gint                    height,
-                                                                gdouble                 blur_radius,
-                                                                gboolean                dim,
-                                                                GError                **error);
+gboolean unity_backgrounds_source_save_png_finish (UnityBackgroundsSource *self,
+                                                   GAsyncResult           *result,
+                                                   GError                **error);
 
 G_END_DECLS

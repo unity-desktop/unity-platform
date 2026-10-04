@@ -19,7 +19,7 @@ incs = [
   include_directories('.'),
 ]
 
-sources += gnome.compile_resources(
+resources = gnome.compile_resources(
   name + '-resources',
   'translucency.gresource.xml',
   c_name: 'unity_translucency',
@@ -27,7 +27,7 @@ sources += gnome.compile_resources(
 
 unity_platform_translucency_lib = library(
   name,
-  sources,
+  sources + resources,
   dependencies: deps,
   include_directories: incs,
   version: meson.project_version(),
@@ -55,7 +55,7 @@ gnome.compile_schemas(
 
 gnome.post_install(glib_compile_schemas: true)
 
-gnome.generate_gir(
+unity_platform_translucency_gir = gnome.generate_gir(
   unity_platform_translucency_lib,
   sources: sources + headers,
   namespace: 'UnityPlatformTranslucency',

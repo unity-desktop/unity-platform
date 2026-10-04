@@ -9,17 +9,20 @@
 
 #include <math.h>
 
-#include <gdesktop-enums.h>
-
 #define GNOME_DESKTOP_USE_UNSTABLE_API
+
+#include <gdesktop-enums.h>
 #include <gnome-bg/gnome-bg.h>
+#include <png.h>
 
 #define BACKGROUND_SCHEMA_ID "org.gnome.desktop.background"
 #define INTERFACE_SCHEMA_ID  "org.gnome.desktop.interface"
 #define PICTURE_URI_KEY      "picture-uri"
 #define PICTURE_URI_DARK_KEY "picture-uri-dark"
+#define PRIMARY_COLOR_KEY    "primary-color"
 #define COLOR_SCHEME_KEY     "color-scheme"
 #define DIM_ALPHA            0.45f
+#define PNG_LEVEL            1
 
 struct _UnityBackgroundsSource
 {
@@ -33,8 +36,40 @@ struct _UnityBackgroundsSource
   gint         cache_width;
   gint         cache_height;
 
+  GPtrArray   *pending_saves;
+
+  GMutex       draw_lock;
+  GCancellable *draw_cancellable;
+  gboolean     drawing;
+  gboolean     stale;
+
   GskRenderer *renderer;
 };
+
+typedef struct
+{
+  gint width;
+  gint height;
+} DrawOp;
+
+typedef struct
+{
+  GStrv    dests;
+  gint     width;
+  gint     height;
+  gdouble  blur_radius;
+  gboolean dim;
+  GBytes  *pixels;
+  gsize    stride;
+} SaveOp;
+
+static void
+save_op_free (SaveOp *op)
+{
+  g_clear_pointer (&op->dests, g_strfreev);
+  g_clear_pointer (&op->pixels, g_bytes_unref);
+  g_free (op);
+}
 
 static void paintable_iface_init (GdkPaintableInterface *iface);
 
@@ -64,7 +99,10 @@ static GdkTexture *
 render_texture (UnityBackgroundsSource *self, gint width, gint height)
 {
   GdkPixbuf *pixbuf = gdk_pixbuf_new (GDK_COLORSPACE_RGB, FALSE, 8, width, height);
+
+  g_mutex_lock (&self->draw_lock);
   gnome_bg_draw (self->bg, pixbuf);
+  g_mutex_unlock (&self->draw_lock);
 
   gint rowstride = gdk_pixbuf_get_rowstride (pixbuf);
   g_autoptr (GBytes) bytes = g_bytes_new_with_free_func (
@@ -75,21 +113,88 @@ render_texture (UnityBackgroundsSource *self, gint width, gint height)
   return gdk_memory_texture_new (width, height, GDK_MEMORY_R8G8B8, bytes, rowstride);
 }
 
+static void queue_draw (UnityBackgroundsSource *self, gint width, gint height);
+static void drain_pending_saves (UnityBackgroundsSource *self);
+
+static void
+draw_worker (GTask        *task,
+             gpointer      source_object,
+             gpointer      task_data,
+             GCancellable *cancellable)
+{
+  UnityBackgroundsSource *self = source_object;
+  DrawOp                 *op   = task_data;
+
+  g_task_return_pointer (task, render_texture (self, op->width, op->height), g_object_unref);
+}
+
+static void
+on_drawn (GObject      *source_object,
+          GAsyncResult *result,
+          gpointer      user_data)
+{
+  UnityBackgroundsSource *self = UNITY_BACKGROUNDS_SOURCE (source_object);
+  DrawOp *op = g_task_get_task_data (G_TASK (result));
+  gint    width  = op->width;
+  gint    height = op->height;
+
+  g_autoptr (GError) error = NULL;
+  g_autoptr (GdkTexture) texture = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    return;
+
+  self->drawing = FALSE;
+
+  if (texture != NULL)
+    {
+      g_set_object (&self->cache, texture);
+      self->cache_width  = width;
+      self->cache_height = height;
+      gdk_paintable_invalidate_contents (GDK_PAINTABLE (self));
+    }
+
+  if (self->stale)
+    {
+      queue_draw (self, width, height);
+      return;
+    }
+
+  drain_pending_saves (self);
+}
+
+static void
+queue_draw (UnityBackgroundsSource *self, gint width, gint height)
+{
+  if (self->drawing)
+    {
+      self->stale = TRUE;
+      return;
+    }
+
+  self->drawing = TRUE;
+  self->stale   = FALSE;
+
+  DrawOp *op = g_new0 (DrawOp, 1);
+
+  op->width  = width;
+  op->height = height;
+
+  g_autoptr (GTask) task = g_task_new (self, self->draw_cancellable, on_drawn, NULL);
+  g_task_set_source_tag (task, queue_draw);
+  g_task_set_task_data (task, op, g_free);
+  g_task_run_in_thread (task, draw_worker);
+}
+
 static GdkTexture *
 ensure_cache (UnityBackgroundsSource *self, gint width, gint height)
 {
-  if (self->cache != NULL
-      && self->cache_width  >= width
-      && self->cache_height >= height)
-    return self->cache;
+  if (self->stale
+      || self->cache == NULL
+      || self->cache_width  < width
+      || self->cache_height < height)
+    queue_draw (self, MAX (width, self->cache_width), MAX (height, self->cache_height));
 
-  gint target_width  = MAX (width,  self->cache_width);
-  gint target_height = MAX (height, self->cache_height);
-
-  g_clear_object (&self->cache);
-  self->cache        = render_texture (self, target_width, target_height);
-  self->cache_width  = target_width;
-  self->cache_height = target_height;
   return self->cache;
 }
 
@@ -141,28 +246,40 @@ render_node_to_texture (UnityBackgroundsSource *self, GskRenderNode *node,
 }
 
 static GdkTexture *
-render_processed (UnityBackgroundsSource *self, gint width, gint height,
+render_processed (UnityBackgroundsSource *self, GdkTexture *base, gint width, gint height,
                   gdouble blur_radius, gboolean dim)
 {
+  GskRenderer *renderer = ensure_renderer (self);
+  if (renderer == NULL)
+    return NULL;
+
   gint overshoot     = blur_radius > 0 ? (gint) ceil (blur_radius) : 0;
-  gint render_width  = width  + 2 * overshoot;
+  gint render_width  = width + 2 * overshoot;
   gint render_height = height + 2 * overshoot;
 
-  g_autoptr (GdkTexture) base = render_texture (self, render_width, render_height);
-  if (base == NULL)
-    return NULL;
+  gfloat  base_width  = gdk_texture_get_width (base);
+  gfloat  base_height = gdk_texture_get_height (base);
+  gdouble scale       = MAX (render_width / base_width, render_height / base_height);
+  gfloat  drawn_width  = base_width * scale;
+  gfloat  drawn_height = base_height * scale;
 
   GtkSnapshot *snapshot = gtk_snapshot_new ();
 
   gtk_snapshot_save (snapshot);
   gtk_snapshot_translate (snapshot,
                           &GRAPHENE_POINT_INIT ((gfloat) -overshoot, (gfloat) -overshoot));
+
   if (blur_radius > 0)
     gtk_snapshot_push_blur (snapshot, blur_radius);
-  gtk_snapshot_append_texture (snapshot, base,
-                               &GRAPHENE_RECT_INIT (0, 0, render_width, render_height));
+
+  gtk_snapshot_append_scaled_texture (snapshot, base, GSK_SCALING_FILTER_LINEAR,
+                                      &GRAPHENE_RECT_INIT ((render_width - drawn_width) / 2.0f,
+                                                           (render_height - drawn_height) / 2.0f,
+                                                           drawn_width, drawn_height));
+
   if (blur_radius > 0)
     gtk_snapshot_pop (snapshot);
+
   gtk_snapshot_restore (snapshot);
 
   if (dim)
@@ -177,51 +294,177 @@ render_processed (UnityBackgroundsSource *self, gint width, gint height,
   return render_node_to_texture (self, node, width, height);
 }
 
-gboolean
-unity_backgrounds_source_save_png (UnityBackgroundsSource *self,
-                                   const gchar * const    *dests,
-                                   gint                    width,
-                                   gint                    height,
-                                   gdouble                 blur_radius,
-                                   gboolean                dim,
-                                   GError                **error)
+static void
+png_append (png_structp png, png_bytep data, png_size_t length)
 {
-  g_return_val_if_fail (UNITY_BACKGROUNDS_IS_SOURCE (self), FALSE);
-  g_return_val_if_fail (dests != NULL && dests[0] != NULL, FALSE);
-  g_return_val_if_fail (width > 0 && height > 0, FALSE);
-  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+  g_byte_array_append (png_get_io_ptr (png), data, length);
+}
 
-  g_autoptr (GdkTexture) texture = render_processed (self, width, height, blur_radius, dim);
-  if (texture == NULL)
+static GBytes *
+encode_png (const guchar *pixels, gint width, gint height, gsize stride)
+{
+  g_autoptr (GByteArray) out = g_byte_array_new ();
+  png_structp png = png_create_write_struct (PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  png_infop info = png_create_info_struct (png);
+
+  if (setjmp (png_jmpbuf (png)))
     {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Failed to render wallpaper");
-      return FALSE;
+      png_destroy_write_struct (&png, &info);
+      return NULL;
     }
 
-  g_autoptr (GBytes) png = gdk_texture_save_to_png_bytes (texture);
-  gsize len = 0;
-  const gchar *data = g_bytes_get_data (png, &len);
+  png_set_write_fn (png, out, png_append, NULL);
+  png_set_compression_level (png, PNG_LEVEL);
+  png_set_filter (png, 0, PNG_FILTER_SUB);
+  png_set_IHDR (png, info, width, height, 8, PNG_COLOR_TYPE_RGB,
+                PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+  png_write_info (png, info);
 
-  gboolean wrote_all = TRUE;
+  for (gint y = 0; y < height; y++)
+    png_write_row (png, (png_bytep) (pixels + (gsize) y * stride));
 
-  for (gsize i = 0; dests[i] != NULL; i++)
+  png_write_end (png, NULL);
+  png_destroy_write_struct (&png, &info);
+
+  return g_byte_array_free_to_bytes (g_steal_pointer (&out));
+}
+
+static void
+encode_worker (GTask        *task,
+               gpointer      source_object,
+               gpointer      task_data,
+               GCancellable *cancellable)
+{
+  SaveOp *op = task_data;
+
+  g_autoptr (GBytes) png = encode_png (g_bytes_get_data (op->pixels, NULL),
+                                       op->width, op->height, op->stride);
+
+  if (png == NULL)
     {
-      /* One bad path must not cost the others. */
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to encode PNG");
+      return;
+    }
+
+  gsize        length = 0;
+  const gchar *data   = g_bytes_get_data (png, &length);
+  g_autoptr (GError) first = NULL;
+
+  for (gsize i = 0; op->dests[i] != NULL; i++)
+    {
       g_autoptr (GError) local = NULL;
 
-      if (g_file_set_contents_full (dests[i], data, len,
+      if (g_file_set_contents_full (op->dests[i], data, length,
                                     G_FILE_SET_CONTENTS_CONSISTENT
                                       | G_FILE_SET_CONTENTS_DURABLE,
                                     0644, &local))
         continue;
 
-      wrote_all = FALSE;
-      if (error != NULL && *error == NULL)
-        g_propagate_error (error, g_steal_pointer (&local));
+      if (first == NULL)
+        first = g_steal_pointer (&local);
     }
 
-  return wrote_all;
+  if (first != NULL)
+    g_task_return_error (task, g_steal_pointer (&first));
+  else
+    g_task_return_boolean (task, TRUE);
+}
+
+static void
+process_save (UnityBackgroundsSource *self, GTask *task)
+{
+  SaveOp *op = g_task_get_task_data (task);
+
+  g_autoptr (GdkTexture) texture =
+    render_processed (self, self->cache, op->width, op->height, op->blur_radius, op->dim);
+
+  if (texture == NULL)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to render wallpaper");
+      return;
+    }
+
+  g_autoptr (GdkTextureDownloader) downloader = gdk_texture_downloader_new (texture);
+  gdk_texture_downloader_set_format (downloader, GDK_MEMORY_R8G8B8);
+  op->pixels = gdk_texture_downloader_download_bytes (downloader, &op->stride);
+
+  g_task_run_in_thread (task, encode_worker);
+}
+
+static gboolean
+cache_ready (UnityBackgroundsSource *self, gint width, gint height)
+{
+  return !self->stale
+         && !self->drawing
+         && self->cache != NULL
+         && self->cache_width >= width
+         && self->cache_height >= height;
+}
+
+static void
+drain_pending_saves (UnityBackgroundsSource *self)
+{
+  if (self->pending_saves->len == 0)
+    return;
+
+  g_autoptr (GPtrArray) ready = g_ptr_array_new_with_free_func (g_object_unref);
+
+  for (guint i = 0; i < self->pending_saves->len; i++)
+    g_ptr_array_add (ready, g_object_ref (g_ptr_array_index (self->pending_saves, i)));
+
+  g_ptr_array_set_size (self->pending_saves, 0);
+
+  for (guint i = 0; i < ready->len; i++)
+    process_save (self, g_ptr_array_index (ready, i));
+}
+
+void
+unity_backgrounds_source_save_png_async (UnityBackgroundsSource *self,
+                                         const gchar * const    *dests,
+                                         gint                    width,
+                                         gint                    height,
+                                         gdouble                 blur_radius,
+                                         gboolean                dim,
+                                         GCancellable           *cancellable,
+                                         GAsyncReadyCallback     callback,
+                                         gpointer                user_data)
+{
+  g_return_if_fail (UNITY_BACKGROUNDS_IS_SOURCE (self));
+  g_return_if_fail (dests != NULL && dests[0] != NULL);
+  g_return_if_fail (width > 0 && height > 0);
+
+  SaveOp *op = g_new0 (SaveOp, 1);
+
+  op->dests       = g_strdupv ((gchar **) dests);
+  op->width       = width;
+  op->height      = height;
+  op->blur_radius = blur_radius;
+  op->dim         = dim;
+
+  g_autoptr (GTask) task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, unity_backgrounds_source_save_png_async);
+  g_task_set_task_data (task, op, (GDestroyNotify) save_op_free);
+
+  ensure_cache (self, width, height);
+
+  if (cache_ready (self, width, height))
+    {
+      process_save (self, task);
+      return;
+    }
+
+  g_ptr_array_add (self->pending_saves, g_steal_pointer (&task));
+}
+
+gboolean
+unity_backgrounds_source_save_png_finish (UnityBackgroundsSource *self,
+                                          GAsyncResult           *result,
+                                          GError                **error)
+{
+  g_return_val_if_fail (UNITY_BACKGROUNDS_IS_SOURCE (self), FALSE);
+  g_return_val_if_fail (g_task_is_valid (result, self), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 static void
@@ -236,8 +479,20 @@ paintable_snapshot (GdkPaintable *paintable, GdkSnapshot *snapshot,
     return;
 
   GdkTexture *texture = ensure_cache (self, w, h);
+
   if (texture == NULL)
-    return;
+    {
+      g_autofree gchar *spec = g_settings_get_string (self->background_settings,
+                                                      PRIMARY_COLOR_KEY);
+      GdkRGBA colour;
+
+      if (!gdk_rgba_parse (&colour, spec))
+        colour = (GdkRGBA) { 0.16f, 0.16f, 0.16f, 1.0f };
+
+      gtk_snapshot_append_color (GTK_SNAPSHOT (snapshot), &colour,
+                                 &GRAPHENE_RECT_INIT (0, 0, (gfloat) width, (gfloat) height));
+      return;
+    }
 
   gtk_snapshot_append_scaled_texture (GTK_SNAPSHOT (snapshot), texture,
                                       GSK_SCALING_FILTER_LINEAR,
@@ -255,10 +510,11 @@ paintable_get_current_image (GdkPaintable *paintable)
 {
   UnityBackgroundsSource *self = UNITY_BACKGROUNDS_SOURCE (paintable);
 
-  if (self->cache != NULL)
-    return GDK_PAINTABLE (g_object_ref (self->cache));
+  GdkTexture *texture = ensure_cache (self, self->cache_width, self->cache_height);
 
-  GdkTexture *texture = ensure_cache (self, 1920, 1080);
+  if (texture == NULL)
+    return gdk_paintable_new_empty (0, 0);
+
   return GDK_PAINTABLE (g_object_ref (texture));
 }
 
@@ -273,9 +529,11 @@ paintable_iface_init (GdkPaintableInterface *iface)
 static void
 invalidate (UnityBackgroundsSource *self)
 {
-  g_clear_object (&self->cache);
-  self->cache_width  = 0;
-  self->cache_height = 0;
+  self->stale = TRUE;
+
+  if (self->cache_width > 0)
+    queue_draw (self, self->cache_width, self->cache_height);
+
   gdk_paintable_invalidate_contents (GDK_PAINTABLE (self));
 }
 
@@ -296,6 +554,9 @@ unity_backgrounds_source_dispose (GObject *object)
 {
   UnityBackgroundsSource *self = UNITY_BACKGROUNDS_SOURCE (object);
 
+  g_cancellable_cancel (self->draw_cancellable);
+  g_clear_object (&self->draw_cancellable);
+
   if (self->renderer != NULL)
     {
       gsk_renderer_unrealize (self->renderer);
@@ -305,6 +566,8 @@ unity_backgrounds_source_dispose (GObject *object)
   g_clear_object (&self->background_settings);
   g_clear_object (&self->interface_settings);
   g_clear_object (&self->cache);
+  g_clear_pointer (&self->pending_saves, g_ptr_array_unref);
+  g_mutex_clear (&self->draw_lock);
 
   G_OBJECT_CLASS (unity_backgrounds_source_parent_class)->dispose (object);
 }
@@ -321,6 +584,10 @@ unity_backgrounds_source_init (UnityBackgroundsSource *self)
   self->bg                  = gnome_bg_new ();
   self->background_settings = g_settings_new (BACKGROUND_SCHEMA_ID);
   self->interface_settings  = g_settings_new (INTERFACE_SCHEMA_ID);
+  self->draw_cancellable    = g_cancellable_new ();
+  self->pending_saves       = g_ptr_array_new_with_free_func (g_object_unref);
+
+  g_mutex_init (&self->draw_lock);
 
   g_signal_connect (self->background_settings, "changed",
                     G_CALLBACK (on_settings_changed), self);

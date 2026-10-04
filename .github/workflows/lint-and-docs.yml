@@ -1,0 +1,84 @@
+name: Lint and docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/bilelmoussaoui/gobject-linter:latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run gobject-linter
+        run: gobject-linter --format sarif > gobject-linter.sarif
+
+      - name: Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gobject-linter.sarif
+          category: gobject-linter
+
+  docs:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/unity-platform-builder:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure
+        run: meson setup builddir -Ddocumentation=true
+
+      - name: Build documentation
+        run: meson compile -C builddir unity-platform-backgrounds-doc unity-platform-translucency-doc
+
+      - name: Check documentation
+        run: meson test -C builddir --print-errorlogs doc-check-backgrounds doc-check-translucency
+
+      - name: Build components documentation (blocked by Astal GIRs without doc filename)
+        continue-on-error: true
+        run: meson compile -C builddir unity-platform-components-doc
+
+      - name: Check components documentation (blocked by Astal GIRs without doc filename)
+        continue-on-error: true
+        run: meson test -C builddir --print-errorlogs doc-check-components
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: builddir/doc
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: [lint, docs]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

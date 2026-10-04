@@ -16,9 +16,7 @@
   <h1>Unity Platform API Reference</h1>
   <p>Version @PROJECT_VERSION@</p>
   <ul>
-    <li><a href="./unity-platform-components/">UnityPlatformComponents</a></li>
-    <li><a href="./unity-platform-quit/">UnityPlatformQuit</a></li>
-    <li><a href="./unity-platform-wlr/">UnityPlatformWlr</a></li>
+@DOC_LINKS@
   </ul>
 </body>
 </html>

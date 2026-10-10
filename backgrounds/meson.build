@@ -1,18 +1,13 @@
 name = 'unity-platform-backgrounds'
 
-cc = meson.get_compiler('c')
-
 deps = [
   dependency('gtk4', version: '>= 4.22'),
   dependency('gio-2.0'),
   dependency('glib-2.0', version: '>= 2.80'),
   dependency('gobject-2.0'),
   dependency('gnome-bg-4'),
-  dependency('libpng'),
   dependency('gsettings-desktop-schemas'),
 ]
-
-link_deps = deps + [ cc.find_library('m', required: false) ]
 
 sources = files(
   'unity-backgrounds-source.c',
@@ -29,7 +24,7 @@ incs = [
 unity_platform_backgrounds_lib = library(
   name,
   sources,
-  dependencies: link_deps,
+  dependencies: deps,
   include_directories: incs,
   version: meson.project_version(),
   soversion: '0',

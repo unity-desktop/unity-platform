@@ -28,10 +28,11 @@ struct _UnityBackgroundsSource
   GSettings   *interface_settings;
 
   GdkTexture  *cache;
-  gint         cache_width;
-  gint         cache_height;
+  gint         draw_width;
+  gint         draw_height;
 
   GCancellable *draw_cancellable;
+  guint        reload_id;
   gboolean     drawing;
   gboolean     stale;
 };
@@ -59,6 +60,13 @@ static void paintable_iface_init (GdkPaintableInterface *iface);
 G_DEFINE_FINAL_TYPE_WITH_CODE (UnityBackgroundsSource, unity_backgrounds_source, G_TYPE_OBJECT,
                                G_IMPLEMENT_INTERFACE (GDK_TYPE_PAINTABLE, paintable_iface_init))
 
+typedef enum
+{
+  PROP_TEXTURE = 1,
+} UnityBackgroundsSourceProperty;
+
+static GParamSpec *properties[PROP_TEXTURE + 1];
+
 static void
 reload (UnityBackgroundsSource *self)
 {
@@ -78,9 +86,15 @@ reload (UnityBackgroundsSource *self)
     gnome_bg_set_filename (self->bg, path);
 }
 
-static GdkTexture *
-render_texture (DrawOp *op)
+static void queue_draw (UnityBackgroundsSource *self, gint width, gint height);
+
+static void
+draw_worker (GTask        *task,
+             gpointer      source_object,
+             gpointer      task_data,
+             GCancellable *cancellable)
 {
+  DrawOp    *op     = task_data;
   gint       width  = op->width;
   gint       height = op->height;
   GdkPixbuf *pixbuf = gdk_pixbuf_new (GDK_COLORSPACE_RGB, FALSE, 8, width, height);
@@ -102,18 +116,10 @@ render_texture (DrawOp *op)
     (gsize) rowstride * height,
     g_object_unref, pixbuf);
 
-  return gdk_memory_texture_new (width, height, GDK_MEMORY_R8G8B8, bytes, rowstride);
-}
-
-static void queue_draw (UnityBackgroundsSource *self, gint width, gint height);
-
-static void
-draw_worker (GTask        *task,
-             gpointer      source_object,
-             gpointer      task_data,
-             GCancellable *cancellable)
-{
-  g_task_return_pointer (task, render_texture (task_data), g_object_unref);
+  g_task_return_pointer (task,
+                         gdk_memory_texture_new (width, height, GDK_MEMORY_R8G8B8,
+                                                 bytes, rowstride),
+                         g_object_unref);
 }
 
 static void
@@ -122,9 +128,6 @@ on_drawn (GObject      *source_object,
           gpointer      user_data)
 {
   UnityBackgroundsSource *self = UNITY_BACKGROUNDS_SOURCE (source_object);
-  DrawOp *op = g_task_get_task_data (G_TASK (result));
-  gint    width  = op->width;
-  gint    height = op->height;
 
   g_autoptr (GError) error = NULL;
   g_autoptr (GdkTexture) texture = g_task_propagate_pointer (G_TASK (result), &error);
@@ -134,16 +137,23 @@ on_drawn (GObject      *source_object,
   if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
     return;
 
-  if (texture != NULL)
+  if (texture != NULL && (self->cache == NULL || !self->stale))
     {
+      gboolean resized = self->cache == NULL
+                         || gdk_texture_get_width (self->cache) != gdk_texture_get_width (texture)
+                         || gdk_texture_get_height (self->cache) != gdk_texture_get_height (texture);
+
       g_set_object (&self->cache, texture);
-      self->cache_width  = width;
-      self->cache_height = height;
+
+      if (resized)
+        gdk_paintable_invalidate_size (GDK_PAINTABLE (self));
+
       gdk_paintable_invalidate_contents (GDK_PAINTABLE (self));
+      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TEXTURE]);
     }
 
   if (self->stale)
-    queue_draw (self, width, height);
+    queue_draw (self, self->draw_width, self->draw_height);
 }
 
 static void
@@ -158,8 +168,10 @@ queue_draw (UnityBackgroundsSource *self, gint width, gint height)
       return;
     }
 
-  self->drawing = TRUE;
-  self->stale   = FALSE;
+  self->drawing     = TRUE;
+  self->stale       = FALSE;
+  self->draw_width  = width;
+  self->draw_height = height;
 
   DrawOp *op = g_new0 (DrawOp, 1);
 
@@ -178,11 +190,8 @@ queue_draw (UnityBackgroundsSource *self, gint width, gint height)
 static GdkTexture *
 ensure_cache (UnityBackgroundsSource *self, gint width, gint height)
 {
-  if (self->stale
-      || self->cache == NULL
-      || self->cache_width  < width
-      || self->cache_height < height)
-    queue_draw (self, MAX (width, self->cache_width), MAX (height, self->cache_height));
+  if (self->cache == NULL || self->stale)
+    queue_draw (self, width, height);
 
   return self->cache;
 }
@@ -219,10 +228,18 @@ paintable_snapshot (GdkPaintable *paintable, GdkSnapshot *snapshot,
                                       &GRAPHENE_RECT_INIT (0, 0, (gfloat) width, (gfloat) height));
 }
 
-static GdkPaintableFlags
-paintable_get_flags (GdkPaintable *paintable)
+static gint
+paintable_get_intrinsic_width (GdkPaintable *paintable)
 {
-  return GDK_PAINTABLE_STATIC_SIZE;
+  GdkTexture *cache = UNITY_BACKGROUNDS_SOURCE (paintable)->cache;
+  return cache != NULL ? gdk_texture_get_width (cache) : 0;
+}
+
+static gint
+paintable_get_intrinsic_height (GdkPaintable *paintable)
+{
+  GdkTexture *cache = UNITY_BACKGROUNDS_SOURCE (paintable)->cache;
+  return cache != NULL ? gdk_texture_get_height (cache) : 0;
 }
 
 static GdkPaintable *
@@ -230,7 +247,7 @@ paintable_get_current_image (GdkPaintable *paintable)
 {
   UnityBackgroundsSource *self = UNITY_BACKGROUNDS_SOURCE (paintable);
 
-  GdkTexture *texture = ensure_cache (self, self->cache_width, self->cache_height);
+  GdkTexture *texture = ensure_cache (self, self->draw_width, self->draw_height);
 
   if (texture == NULL)
     return gdk_paintable_new_empty (0, 0);
@@ -241,32 +258,37 @@ paintable_get_current_image (GdkPaintable *paintable)
 static void
 paintable_iface_init (GdkPaintableInterface *iface)
 {
-  iface->snapshot          = paintable_snapshot;
-  iface->get_flags         = paintable_get_flags;
-  iface->get_current_image = paintable_get_current_image;
+  iface->snapshot             = paintable_snapshot;
+  iface->get_intrinsic_width  = paintable_get_intrinsic_width;
+  iface->get_intrinsic_height = paintable_get_intrinsic_height;
+  iface->get_current_image    = paintable_get_current_image;
 }
 
 static void
-invalidate (UnityBackgroundsSource *self)
+reload_once (gpointer user_data)
 {
-  self->stale = TRUE;
+  UnityBackgroundsSource *self = user_data;
 
-  if (self->cache_width > 0)
-    queue_draw (self, self->cache_width, self->cache_height);
-
-  gdk_paintable_invalidate_contents (GDK_PAINTABLE (self));
+  self->reload_id = 0;
+  reload (self);
 }
 
 static void
 on_settings_changed (GSettings *settings, gchar *key, gpointer user_data)
 {
-  reload (user_data);
+  UnityBackgroundsSource *self = user_data;
+
+  if (self->reload_id == 0)
+    self->reload_id = g_idle_add_once (reload_once, self);
 }
 
 static void
 on_bg_changed (GnomeBG *bg, gpointer user_data)
 {
-  invalidate (user_data);
+  UnityBackgroundsSource *self = user_data;
+
+  self->stale = TRUE;
+  queue_draw (self, self->draw_width, self->draw_height);
 }
 
 static void
@@ -274,6 +296,7 @@ unity_backgrounds_source_dispose (GObject *object)
 {
   UnityBackgroundsSource *self = UNITY_BACKGROUNDS_SOURCE (object);
 
+  g_clear_handle_id (&self->reload_id, g_source_remove);
   g_cancellable_cancel (self->draw_cancellable);
   g_clear_object (&self->draw_cancellable);
 
@@ -286,9 +309,41 @@ unity_backgrounds_source_dispose (GObject *object)
 }
 
 static void
+unity_backgrounds_source_get_property (GObject    *object,
+                                       guint       prop_id,
+                                       GValue     *value,
+                                       GParamSpec *pspec)
+{
+  UnityBackgroundsSource *self = UNITY_BACKGROUNDS_SOURCE (object);
+
+  switch ((UnityBackgroundsSourceProperty) prop_id)
+    {
+    case PROP_TEXTURE:
+      g_value_set_object (value, self->cache);
+      break;
+    }
+}
+
+static void
 unity_backgrounds_source_class_init (UnityBackgroundsSourceClass *klass)
 {
-  G_OBJECT_CLASS (klass)->dispose = unity_backgrounds_source_dispose;
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->dispose      = unity_backgrounds_source_dispose;
+  object_class->get_property = unity_backgrounds_source_get_property;
+
+  /**
+   * UnityBackgroundsSource:texture:
+   *
+   * The latest drawn wallpaper, or %NULL before the first draw. It changes
+   * only when a new wallpaper is drawn; a draw that a newer change made out
+   * of date does not change it.
+   */
+  properties[PROP_TEXTURE] =
+    g_param_spec_object ("texture", NULL, NULL, GDK_TYPE_TEXTURE,
+                         G_PARAM_READABLE | G_PARAM_EXPLICIT_NOTIFY | G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, G_N_ELEMENTS (properties), properties);
 }
 
 static void
@@ -313,4 +368,12 @@ UnityBackgroundsSource *
 unity_backgrounds_source_new (void)
 {
   return g_object_new (UNITY_BACKGROUNDS_TYPE_SOURCE, NULL);
+}
+
+GdkTexture *
+unity_backgrounds_source_get_texture (UnityBackgroundsSource *self)
+{
+  g_return_val_if_fail (UNITY_BACKGROUNDS_IS_SOURCE (self), NULL);
+
+  return self->cache;
 }
